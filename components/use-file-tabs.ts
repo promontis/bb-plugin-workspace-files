@@ -334,6 +334,21 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
     [writeTab],
   );
 
+  // Safety net: when the editor goes away (another thread, a closed panel),
+  // write every unsaved tab now instead of dropping the pending autosave.
+  const writeTabRef = useRef(writeTab);
+  writeTabRef.current = writeTab;
+  useEffect(
+    () => () => {
+      for (const tab of tabsRef.current) {
+        if (isDirty(tab) && tab.save.kind === "clean" && tab.file?.kind === "text") {
+          writeTabRef.current(tab.path, tab.sha256 ?? "force");
+        }
+      }
+    },
+    [],
+  );
+
   // Autosave, like Conductor: a changed text file is written a moment after
   // the last keystroke, background tabs included. The write keeps its
   // compare-and-swap guard, so an edit made on disk meanwhile still surfaces

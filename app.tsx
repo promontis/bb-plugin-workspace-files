@@ -148,7 +148,10 @@ function EnsureThreadFilesTab({
     const anchor = anchorRef.current;
     const target = anchor?.closest<HTMLElement>("[data-split-pane-id]") ?? null;
     const rows = anchor?.closest<HTMLElement>("[data-thread-header-rows]") ?? null;
-    if (!file.active || target === null || rows === null) {
+    // While a chat is showing, keep the last position: the editor stays
+    // mounted (hidden) so unsaved edits, undo and autosave survive the switch.
+    if (!file.active) return;
+    if (target === null || rows === null) {
       setOverlay(null);
       return;
     }
@@ -193,7 +196,9 @@ function EnsureThreadFilesTab({
               data-bb-plugin-root=""
               data-bb-plugin="workspace-files"
               className="flex min-h-0 flex-col overflow-hidden bg-background"
+              aria-hidden={!file.active}
               style={{
+                display: file.active ? "flex" : "none",
                 position: "fixed",
                 top: overlay.top,
                 right: overlay.right,
