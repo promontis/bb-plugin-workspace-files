@@ -108,7 +108,9 @@ export function FileView({
           monaco={monaco}
           path={tab.path}
           value={tab.draft ?? file.content}
-          readOnly={tab.mode !== "edit" || !file.editable}
+          // Conductor has no Read/Edit switch: a file is always editable,
+          // unless it is too large to edit.
+          readOnly={!file.editable}
           onChange={(next) => onChangeDraft(tab.path, next)}
           onSave={onSave}
           reveal={revealLine}

@@ -654,7 +654,14 @@ export function Workspace({
             ) : null}
             {activeTab?.file?.kind === "text" ? (
               <>
-                {display === "file" ? (
+                {display === "file" && monaco !== null && isMarkdownPath(activeTab.path) ? (
+                  <PreviewToggle
+                    isPreview={activeTab.mode === "preview"}
+                    canPreview={canPreview(activeTab)}
+                    onChange={(preview) => tabs.setMode(activeTab.path, preview ? "preview" : "edit")}
+                  />
+                ) : null}
+                {display === "file" && monaco === null ? (
                   <ModeToggle
                     mode={activeTab.mode}
                     isMarkdown={isMarkdownPath(activeTab.path)}
@@ -1056,6 +1063,35 @@ function readStoredFlag(key: string): boolean {
 
 function storeFlag(key: string, value: boolean): void {
   safeWrite(key, value ? "true" : "false");
+}
+
+/** Markdown only: the file itself or its rendered preview, as in Conductor. */
+function PreviewToggle({
+  isPreview,
+  canPreview,
+  onChange,
+}: {
+  isPreview: boolean;
+  canPreview: boolean;
+  onChange: (preview: boolean) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Markdown display"
+      className="flex shrink-0 items-center gap-0.5 rounded-lg bg-surface-raised p-1"
+    >
+      <ModeSegment icon="FileText" label="File" isSelected={!isPreview} onClick={() => onChange(false)} />
+      <ModeSegment
+        icon="Eye"
+        label="Preview"
+        isSelected={isPreview}
+        isDisabled={!canPreview}
+        title={canPreview ? undefined : "This file is too large to preview"}
+        onClick={() => onChange(true)}
+      />
+    </div>
+  );
 }
 
 /** Conductor's three views of a changed file: unified diff, split diff, file. */
