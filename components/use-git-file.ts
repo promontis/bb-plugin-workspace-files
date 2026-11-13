@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import {
   experimental_useRpcKeyedQuery as useRpcKeyedQuery,
@@ -106,6 +106,9 @@ const gitContract = defineRpcContract({
     output: z.looseObject({ ok: z.boolean() }),
   },
 });
+
+/** Fired after a Viewed mark changes, so other views of it refresh. */
+export const VIEWED_CHANGED_EVENT = "workspace-files:viewed-changed";
 
 /** Same key format as the git plugin's `gitPatchKey`. */
 function patchKey(
@@ -256,6 +259,7 @@ export function useGitFile({
         await clear.mutate({ environmentId, target, path: entry.path });
       }
       await viewed.refetch();
+      window.dispatchEvent(new CustomEvent(VIEWED_CHANGED_EVENT, { detail: { environmentId } }));
     },
     // `target` is rebuilt every render; its fields are the real dependencies.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -288,6 +292,8 @@ export interface ChangedFile {
   isUntracked: boolean;
   /** Part of the not-yet-committed changes (Conductor's "U"). */
   isUncommitted: boolean;
+  /** Marked Viewed at its current revision (a new edit clears it). */
+  isViewed: boolean;
 }
 
 export interface GitChangesState {
@@ -337,6 +343,24 @@ export function useGitChanges(environmentId: string | null): GitChangesState {
   });
 
   const listed = files.data?.outcome === "available" ? (files.data.files ?? []) : [];
+  const viewed = useRpcQuery({
+    pluginId: GIT_PLUGIN_ID,
+    contract: gitContract,
+    method: "viewed",
+    input: { environmentId: environmentId ?? "-", target, paths: listed.slice(0, 500).map((file) => file.path) },
+    enabled: enabled && isGit && listed.length > 0,
+  });
+  const refetchViewed = viewed.refetch;
+  useEffect(() => {
+    const onChanged = (event: Event) => {
+      if ((event as CustomEvent<{ environmentId: string }>).detail.environmentId === environmentId) {
+        void refetchViewed();
+      }
+    };
+    window.addEventListener(VIEWED_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(VIEWED_CHANGED_EVENT, onChanged);
+  }, [environmentId, refetchViewed]);
+  const viewedRevisions = new Map((viewed.data?.files ?? []).map((file) => [file.path, file.revision]));
   const uncommittedPaths = new Set(
     target.type === "uncommitted"
       ? listed.map((file) => file.path)
@@ -352,6 +376,7 @@ export function useGitChanges(environmentId: string | null): GitChangesState {
       deletions: file.deletions,
       isUntracked: file.origin === "untracked",
       isUncommitted: uncommittedPaths.has(file.path),
+      isViewed: viewedRevisions.get(file.path) === file.revision,
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
 

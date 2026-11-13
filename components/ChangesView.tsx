@@ -21,12 +21,15 @@ const MONO = '"Conductor Geist Mono", ui-monospace, "SFMono-Regular", monospace'
 export function ChangesView({
   changes,
   layout,
+  hideViewed,
   activePath,
   onOpenFile,
   onDiscard,
 }: {
   changes: GitChangesState;
   layout: ChangesLayout;
+  /** The Viewed filter (ours; Conductor has none): leave viewed files out. */
+  hideViewed: boolean;
   activePath: string | null;
   onOpenFile: (path: string) => void;
   onDiscard: (file: ChangedFile) => void;
@@ -42,6 +45,8 @@ export function ChangesView({
   }
 
   const count = changes.files.length;
+  const viewedCount = changes.files.reduce((total, file) => total + (file.isViewed ? 1 : 0), 0);
+  const shown = hideViewed ? changes.files.filter((file) => !file.isViewed) : changes.files;
   const row = (file: ChangedFile, label: React.ReactNode) => (
     <ChangeRow
       key={file.path}
@@ -61,18 +66,24 @@ export function ChangesView({
       >
         <span>
           {count} {count === 1 ? "file" : "files"} changed
+          {viewedCount > 0 ? (
+            <span className="text-xs">
+              {" · "}
+              {viewedCount} viewed{hideViewed ? " (hidden)" : ""}
+            </span>
+          ) : null}
         </span>
         <span className="ml-auto text-xs" style={{ fontFamily: MONO }}>
           <Stat additions={changes.insertions} deletions={changes.deletions} />
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-2 py-1">
-        {count === 0 ? (
+        {shown.length === 0 ? (
           <p className="px-2 py-2 text-sm" style={{ color: MUTED }}>
-            No changes.
+            {count === 0 ? "No changes." : "Every changed file is viewed."}
           </p>
         ) : layout === "list" ? (
-          changes.files.map((file) => {
+          shown.map((file) => {
             const { directory, name } = splitPath(file.path);
             return row(
               file,
@@ -83,7 +94,7 @@ export function ChangesView({
             );
           })
         ) : (
-          groupByDirectory(changes.files).map((group) => {
+          groupByDirectory(shown).map((group) => {
             const isCollapsed = collapsed.has(group.directory);
             const files = group.files.map((file) => row(file, splitPath(file.path).name));
             if (group.directory === "") return <div key="(root)">{files}</div>;
@@ -154,7 +165,13 @@ function ChangeRow({
         className="absolute inset-0 cursor-pointer rounded-md"
         aria-label={`Open ${file.path}`}
       />
-      <span className="pointer-events-none min-w-0 flex-1 truncate text-sm text-foreground">{label}</span>
+      {/* Conductor fades a viewed file to half strength, row background aside. */}
+      <span
+        className="pointer-events-none min-w-0 flex-1 truncate text-sm text-foreground"
+        style={file.isViewed ? { opacity: 0.5 } : undefined}
+      >
+        {label}
+      </span>
       {isHovered ? (
         file.isUncommitted ? (
           <button
@@ -169,7 +186,10 @@ function ChangeRow({
           </button>
         ) : null
       ) : (
-        <span className="pointer-events-none flex shrink-0 items-center gap-1.5 text-xs" style={{ fontFamily: MONO }}>
+        <span
+          className="pointer-events-none flex shrink-0 items-center gap-1.5 text-xs"
+          style={{ fontFamily: MONO, opacity: file.isViewed ? 0.5 : undefined }}
+        >
           {file.isUncommitted ? <span style={{ color: "#f3f2f1" }}>U</span> : null}
           <Stat additions={file.additions} deletions={file.deletions} />
           <KindMark kind={file.changeKind} isUntracked={file.isUntracked} />

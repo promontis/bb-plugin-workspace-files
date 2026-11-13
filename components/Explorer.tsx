@@ -45,6 +45,7 @@ export interface ExplorerProps {
 type PanelTab = "files" | "changes";
 const PANEL_TAB_KEY = "workspace-files:panel-tab";
 const CHANGES_LAYOUT_KEY = "workspace-files:changes-layout";
+const HIDE_VIEWED_KEY = "workspace-files:hide-viewed";
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
@@ -98,6 +99,9 @@ export function Explorer({
   );
   const [changesLayout, setChangesLayout] = useState<ChangesLayout>(() =>
     readStored(CHANGES_LAYOUT_KEY, ["list", "tree"] as const, "list"),
+  );
+  const [hideViewed, setHideViewed] = useState(() =>
+    readStored(HIDE_VIEWED_KEY, ["true", "false"] as const, "false") === "true",
   );
   const changes = useGitChanges(environmentId);
   const selectTab = (next: PanelTab) => {
@@ -223,6 +227,15 @@ export function Explorer({
         ) : null}
         {panelTab === "changes" && changes.isAvailable ? (
           <div className="ml-auto flex items-center gap-0.5">
+            <ExplorerAction
+              icon={hideViewed ? "EyeOff" : "Eye"}
+              label={hideViewed ? "Show viewed files" : "Hide viewed files"}
+              isActive={hideViewed}
+              onClick={() => {
+                setHideViewed(!hideViewed);
+                store(HIDE_VIEWED_KEY, String(!hideViewed));
+              }}
+            />
             <button
               type="button"
               onClick={() => {
@@ -278,6 +291,7 @@ export function Explorer({
         <ChangesView
           changes={changes}
           layout={changesLayout}
+          hideViewed={hideViewed}
           activePath={activePath}
           onOpenFile={onOpenChange ?? onOpenFile}
           onDiscard={onDiscardRequest}
