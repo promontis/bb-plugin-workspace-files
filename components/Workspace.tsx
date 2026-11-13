@@ -563,7 +563,7 @@ export function Workspace({
             aria-label={isExplorerOpen ? "Hide the file explorer" : "Show the file explorer"}
             title={activeTab?.path ?? (isExplorerOpen ? "Hide the file explorer" : "Show the file explorer")}
             className={cn(
-              "flex h-7 min-w-0 max-w-72 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2",
+              "flex h-7 min-w-0 max-w-[70%] shrink cursor-pointer items-center gap-1.5 rounded-md border border-border px-2",
               "text-xs font-medium text-foreground shadow-xs hover:bg-state-hover",
               "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none",
             )}
@@ -573,9 +573,11 @@ export function Workspace({
             ) : (
               <FileGlyph path={activeTab.path} kind="file" />
             )}
-            <span className="truncate">
-              {activeTab === null ? "Files" : basename(activeTab.path)}
-            </span>
+            {activeTab === null ? (
+              <span className="truncate">Files</span>
+            ) : (
+              <FilePathLabel path={activeTab.path} />
+            )}
           </button>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -688,6 +690,20 @@ export function Workspace({
         />
       ) : null}
     </div>
+  );
+}
+
+/** Workspace-relative path: folders muted and truncated first, file name always visible. */
+function FilePathLabel({ path }: { path: string }) {
+  const name = basename(path);
+  const folder = path.slice(0, path.length - name.length);
+  return (
+    <span className="flex min-w-0 items-center">
+      {folder === "" ? null : (
+        <span className="min-w-0 truncate text-muted-foreground">{folder}</span>
+      )}
+      <span className="shrink-0">{name}</span>
+    </span>
   );
 }
 
