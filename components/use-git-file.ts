@@ -278,3 +278,88 @@ export function useGitFile({
     setViewed,
   };
 }
+
+export interface ChangedFile {
+  path: string;
+  changeKind: string;
+  additions: number;
+  deletions: number;
+  /** New on disk and not yet known to git. */
+  isUntracked: boolean;
+  /** Part of the not-yet-committed changes (Conductor's "U"). */
+  isUncommitted: boolean;
+}
+
+export interface GitChangesState {
+  /** The workspace is a git checkout BB can diff. */
+  isAvailable: boolean;
+  files: ChangedFile[];
+  insertions: number;
+  deletions: number;
+  isLoading: boolean;
+}
+
+/**
+ * Every changed file of a workspace against the same target the editor diffs
+ * with (the merge-base branch, else uncommitted), plus which of them still
+ * have uncommitted edits.
+ */
+export function useGitChanges(environmentId: string | null): GitChangesState {
+  const enabled = environmentId !== null;
+  const status = useRpcKeyedQuery({
+    pluginId: GIT_PLUGIN_ID,
+    contract: gitContract,
+    method: "status",
+    keys: environmentId === null ? [] : [environmentId],
+    enabled,
+  });
+  const row = environmentId === null ? undefined : status.data?.[environmentId];
+  const isGit = row?.outcome === "available";
+  const mergeBaseBranch = row?.workspace?.mergeBase?.mergeBaseBranch;
+  const target: DiffTarget =
+    mergeBaseBranch === undefined || mergeBaseBranch === ""
+      ? { type: "uncommitted" }
+      : { type: "all", mergeBaseBranch };
+
+  const files = useRpcQuery({
+    pluginId: GIT_PLUGIN_ID,
+    contract: gitContract,
+    method: "files",
+    input: { environmentId: environmentId ?? "-", target, ignoreWhitespace: false },
+    enabled: enabled && isGit,
+  });
+  const uncommitted = useRpcQuery({
+    pluginId: GIT_PLUGIN_ID,
+    contract: gitContract,
+    method: "files",
+    input: { environmentId: environmentId ?? "-", target: { type: "uncommitted" }, ignoreWhitespace: false },
+    enabled: enabled && isGit && target.type === "all",
+  });
+
+  const listed = files.data?.outcome === "available" ? (files.data.files ?? []) : [];
+  const uncommittedPaths = new Set(
+    target.type === "uncommitted"
+      ? listed.map((file) => file.path)
+      : uncommitted.data?.outcome === "available"
+        ? (uncommitted.data.files ?? []).map((file) => file.path)
+        : [],
+  );
+  const changed: ChangedFile[] = listed
+    .map((file) => ({
+      path: file.path,
+      changeKind: file.changeKind,
+      additions: file.additions,
+      deletions: file.deletions,
+      isUntracked: file.origin === "untracked",
+      isUncommitted: uncommittedPaths.has(file.path),
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+
+  return {
+    isAvailable: isGit,
+    files: changed,
+    insertions: changed.reduce((total, file) => total + file.additions, 0),
+    deletions: changed.reduce((total, file) => total + file.deletions, 0),
+    isLoading: status.isLoading || files.isLoading,
+  };
+}

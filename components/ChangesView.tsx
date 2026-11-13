@@ -1,0 +1,209 @@
+import { useState } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon, FolderOpenIcon, Undo02Icon } from "@hugeicons/core-free-icons";
+import { cn } from "@/lib/utils";
+import { groupByDirectory, splitPath } from "@/lib/changes";
+import type { ChangedFile, GitChangesState } from "./use-git-file";
+
+export type ChangesLayout = "list" | "tree";
+
+// Measured from Conductor's Changes tab.
+const MUTED = "#a4a09d";
+const ADDED = "#77db89";
+const REMOVED = "#e77a76";
+const MODIFIED_MARK = "#fceb8f";
+const HOVER = "#272423";
+const ACTIVE = "#2c2a28";
+const GUIDE = "#373431";
+const SEPARATOR = "#282523";
+const MONO = '"Conductor Geist Mono", ui-monospace, "SFMono-Regular", monospace';
+
+export function ChangesView({
+  changes,
+  layout,
+  activePath,
+  onOpenFile,
+  onDiscard,
+}: {
+  changes: GitChangesState;
+  layout: ChangesLayout;
+  activePath: string | null;
+  onOpenFile: (path: string) => void;
+  onDiscard: (file: ChangedFile) => void;
+}) {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  if (!changes.isAvailable) {
+    return (
+      <p className="px-4 py-3 text-sm" style={{ color: MUTED }}>
+        {changes.isLoading ? "Reading changes…" : "This workspace is not a git checkout."}
+      </p>
+    );
+  }
+
+  const count = changes.files.length;
+  const row = (file: ChangedFile, label: React.ReactNode) => (
+    <ChangeRow
+      key={file.path}
+      file={file}
+      label={label}
+      isActive={file.path === activePath}
+      onOpen={() => onOpenFile(file.path)}
+      onDiscard={() => onDiscard(file)}
+    />
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div
+        className="flex h-10 shrink-0 items-center px-4 text-sm"
+        style={{ borderBottom: `1px solid ${SEPARATOR}`, color: MUTED }}
+      >
+        <span>
+          {count} {count === 1 ? "file" : "files"} changed
+        </span>
+        <span className="ml-auto text-xs" style={{ fontFamily: MONO }}>
+          <Stat additions={changes.insertions} deletions={changes.deletions} />
+        </span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto px-2 py-1">
+        {count === 0 ? (
+          <p className="px-2 py-2 text-sm" style={{ color: MUTED }}>
+            No changes.
+          </p>
+        ) : layout === "list" ? (
+          changes.files.map((file) => {
+            const { directory, name } = splitPath(file.path);
+            return row(
+              file,
+              <>
+                {directory === "" ? null : <span style={{ color: MUTED }}>{directory}/</span>}
+                <span>{name}</span>
+              </>,
+            );
+          })
+        ) : (
+          groupByDirectory(changes.files).map((group) => {
+            const isCollapsed = collapsed.has(group.directory);
+            const files = group.files.map((file) => row(file, splitPath(file.path).name));
+            if (group.directory === "") return <div key="(root)">{files}</div>;
+            return (
+              <div key={group.directory}>
+                <button
+                  type="button"
+                  aria-expanded={!isCollapsed}
+                  onClick={() =>
+                    setCollapsed((current) => {
+                      const next = new Set(current);
+                      if (next.has(group.directory)) next.delete(group.directory);
+                      else next.add(group.directory);
+                      return next;
+                    })
+                  }
+                  className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-1 text-left"
+                  style={{ color: MUTED }}
+                >
+                  <HugeiconsIcon
+                    icon={ArrowDown01Icon}
+                    aria-hidden
+                    className={cn("size-3.5 shrink-0 transition-transform", isCollapsed && "-rotate-90")}
+                  />
+                  <HugeiconsIcon icon={FolderOpenIcon} aria-hidden className="size-3.5 shrink-0" />
+                  <span className="truncate text-xs" style={{ fontFamily: MONO }}>
+                    {group.directory.split("/").join(" / ")}
+                  </span>
+                </button>
+                {isCollapsed ? null : (
+                  <div className="ml-2.5 pl-2" style={{ borderLeft: `1px solid ${GUIDE}` }}>
+                    {files}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ChangeRow({
+  file,
+  label,
+  isActive,
+  onOpen,
+  onDiscard,
+}: {
+  file: ChangedFile;
+  label: React.ReactNode;
+  isActive: boolean;
+  onOpen: () => void;
+  onDiscard: () => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="relative flex h-8 items-center gap-2 rounded-md px-2"
+      style={{ background: isActive ? ACTIVE : isHovered ? HOVER : undefined }}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="absolute inset-0 cursor-pointer rounded-md"
+        aria-label={`Open ${file.path}`}
+      />
+      <span className="pointer-events-none min-w-0 flex-1 truncate text-sm text-foreground">{label}</span>
+      {isHovered ? (
+        file.isUncommitted ? (
+          <button
+            type="button"
+            onClick={onDiscard}
+            aria-label={`Discard changes in ${file.path}`}
+            title="Discard changes"
+            className="relative z-10 flex size-6 cursor-pointer items-center justify-center rounded-md hover:bg-state-hover"
+            style={{ color: MUTED }}
+          >
+            <HugeiconsIcon icon={Undo02Icon} aria-hidden className="size-3.5" />
+          </button>
+        ) : null
+      ) : (
+        <span className="pointer-events-none flex shrink-0 items-center gap-1.5 text-xs" style={{ fontFamily: MONO }}>
+          {file.isUncommitted ? <span style={{ color: "#f3f2f1" }}>U</span> : null}
+          <Stat additions={file.additions} deletions={file.deletions} />
+          <KindMark kind={file.changeKind} isUntracked={file.isUntracked} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+function Stat({ additions, deletions }: { additions: number; deletions: number }) {
+  return (
+    <span className="tabular-nums">
+      {additions > 0 ? <span style={{ color: ADDED }}>+{additions}</span> : null}
+      {additions > 0 && deletions > 0 ? " " : null}
+      {deletions > 0 ? <span style={{ color: REMOVED }}>-{deletions}</span> : null}
+    </span>
+  );
+}
+
+/** Conductor's square status mark: a dot for modified, a plus for new, a minus for deleted. */
+function KindMark({ kind, isUntracked }: { kind: string; isUntracked: boolean }) {
+  const isNew = isUntracked || kind === "added";
+  const isDeleted = kind === "deleted";
+  const color = isNew ? MUTED : isDeleted ? REMOVED : MODIFIED_MARK;
+  return (
+    <svg viewBox="0 0 12 12" aria-label={isNew ? "added" : isDeleted ? "deleted" : "modified"} className="size-3 shrink-0">
+      <rect x="0.75" y="0.75" width="10.5" height="10.5" rx="1.5" fill="none" stroke={color} strokeWidth="1.2" />
+      {isNew ? (
+        <path d="M6 3.5v5M3.5 6h5" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+      ) : isDeleted ? (
+        <path d="M3.5 6h5" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+      ) : (
+        <circle cx="6" cy="6" r="1.3" fill={color} />
+      )}
+    </svg>
+  );
+}

@@ -11,6 +11,10 @@ import {
 import type { ScopeRef } from "@/lib/route";
 import { FileGlyph } from "./FileGlyph";
 import { SearchResults } from "./SearchResults";
+import { ChangesView, type ChangesLayout } from "./ChangesView";
+import { type ChangedFile, useGitChanges } from "./use-git-file";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { FolderTreeIcon, LeftToRightListBulletIcon } from "@hugeicons/core-free-icons";
 
 export interface ExplorerProps {
   entries: readonly FlatEntry[];
@@ -30,6 +34,31 @@ export interface ExplorerProps {
   /** Bumped by ⌘⇧F: focus the search field and select what is in it. */
   searchFocusRequest: number;
   header: React.ReactNode;
+  /** The git environment behind the workspace, for the Changes tab. */
+  environmentId: string | null;
+  /** Ask to discard one changed file (the caller confirms first). */
+  onDiscardRequest: (file: ChangedFile) => void;
+}
+
+type PanelTab = "files" | "changes";
+const PANEL_TAB_KEY = "workspace-files:panel-tab";
+const CHANGES_LAYOUT_KEY = "workspace-files:changes-layout";
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  try {
+    const value = window.localStorage.getItem(key);
+    return allowed.includes(value as T) ? (value as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function store(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Only a preference.
+  }
 }
 
 // Row geometry measured from Conductor's file tree: 20px per level, the
@@ -58,7 +87,20 @@ export function Explorer({
   scope,
   searchFocusRequest,
   header,
+  environmentId,
+  onDiscardRequest,
 }: ExplorerProps) {
+  const [panelTab, setPanelTab] = useState<PanelTab>(() =>
+    readStored(PANEL_TAB_KEY, ["files", "changes"] as const, "files"),
+  );
+  const [changesLayout, setChangesLayout] = useState<ChangesLayout>(() =>
+    readStored(CHANGES_LAYOUT_KEY, ["list", "tree"] as const, "list"),
+  );
+  const changes = useGitChanges(environmentId);
+  const selectTab = (next: PanelTab) => {
+    setPanelTab(next);
+    store(PANEL_TAB_KEY, next);
+  };
   // The field searches file CONTENTS across the workspace. Finding a file by
   // its name is the magnifier button (⌘P) beside it.
   const [query, setQuery] = useState("");
@@ -79,6 +121,7 @@ export function Explorer({
 
   useEffect(() => {
     if (searchFocusRequest === 0) return;
+    setPanelTab("files");
     setIsSearchOpen(true);
     // The field mounts with the state change; focus it on the next frame.
     requestAnimationFrame(() => {
@@ -166,9 +209,36 @@ export function Explorer({
         data-workspace-files-explorer-header=""
         className="flex h-10 shrink-0 items-center gap-1 border-b border-border-hairline px-2"
       >
-        <span className="flex h-7 items-center rounded-md bg-surface-raised px-2.5 text-sm text-foreground">
-          All files
-        </span>
+        <PanelTabButton label="All files" isSelected={panelTab === "files"} onClick={() => selectTab("files")} />
+        {changes.isAvailable ? (
+          <PanelTabButton
+            label="Changes"
+            count={changes.files.length}
+            isSelected={panelTab === "changes"}
+            onClick={() => selectTab("changes")}
+          />
+        ) : null}
+        {panelTab === "changes" && changes.isAvailable ? (
+          <div className="ml-auto flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                const next = changesLayout === "list" ? "tree" : "list";
+                setChangesLayout(next);
+                store(CHANGES_LAYOUT_KEY, next);
+              }}
+              aria-label={changesLayout === "list" ? "Show changes as a tree" : "Show changes as a list"}
+              title={changesLayout === "list" ? "Show as tree" : "Show as list"}
+              className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-state-hover hover:text-foreground"
+            >
+              <HugeiconsIcon
+                icon={changesLayout === "list" ? FolderTreeIcon : LeftToRightListBulletIcon}
+                aria-hidden
+                className="size-3.5"
+              />
+            </button>
+          </div>
+        ) : (
         <div className="ml-auto flex items-center gap-0.5">
           <ExplorerAction
             icon="Search"
@@ -198,7 +268,19 @@ export function Explorer({
             onClick={onRefresh}
           />
         </div>
+        )}
       </div>
+
+      {panelTab === "changes" && changes.isAvailable ? (
+        <ChangesView
+          changes={changes}
+          layout={changesLayout}
+          activePath={activePath}
+          onOpenFile={onOpenFile}
+          onDiscard={onDiscardRequest}
+        />
+      ) : (
+      <>
 
       {showSearch ? (
       <div className="flex shrink-0 items-center gap-1.5 px-2 pt-2 pb-2">
@@ -323,7 +405,36 @@ export function Explorer({
           {truncated ? " · listing truncated" : ""}
         </div>
       ) : null}
+      </>
+      )}
     </div>
+  );
+}
+
+function PanelTabButton({
+  label,
+  count,
+  isSelected,
+  onClick,
+}: {
+  label: string;
+  count?: number;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isSelected}
+      className={cn(
+        "flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors",
+        isSelected ? "bg-[#2c2a28] text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+      {count === undefined ? null : <span className="text-muted-foreground tabular-nums">{count}</span>}
+    </button>
   );
 }
 

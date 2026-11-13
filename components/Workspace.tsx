@@ -103,7 +103,8 @@ export function Workspace({
   const [viewByPath, setViewByPath] = useState<Record<string, FileDisplay>>({});
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(() => readStoredFlag(IGNORE_WHITESPACE_KEY));
   const [wrapLines, setWrapLines] = useState(() => readStoredFlag(WRAP_LINES_KEY));
-  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
+  // The file the discard dialog asks about; from the toolbar or the Changes list.
+  const [discardTarget, setDiscardTarget] = useState<{ path: string; isNew: boolean } | null>(null);
   const [isDiscarding, setIsDiscarding] = useState(false);
   // ⌘⇧F focuses the explorer's text search, VS Code's binding for "search in files".
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
@@ -345,15 +346,16 @@ export function Workspace({
   };
 
   const discardChanges = useCallback(async () => {
-    if (activeTab === null || scope === null) return;
-    const path = activeTab.path;
+    if (discardTarget === null || scope === null) return;
+    const { path, isNew } = discardTarget;
     setIsDiscarding(true);
     try {
       await rpc.call("discard", { scope, path });
-      setIsDiscardOpen(false);
-      if (git.isUntracked) {
+      setDiscardTarget(null);
+      const isOpen = tabs.tabs.some((tab) => tab.path === path);
+      if (isOpen && isNew) {
         tabs.close(path);
-      } else {
+      } else if (isOpen && tabs.activeTab?.path === path) {
         tabs.reload();
       }
       loadTree(scope, includeHidden);
@@ -363,7 +365,7 @@ export function Workspace({
     } finally {
       setIsDiscarding(false);
     }
-  }, [activeTab, git.isUntracked, includeHidden, loadTree, rpc, scope, tabs]);
+  }, [discardTarget, includeHidden, loadTree, rpc, scope, tabs]);
 
   const openInPreview = useCallback(() => {
     if (activeTab === null || resolved === null) return;
@@ -521,6 +523,10 @@ export function Workspace({
           scope={scope}
           searchFocusRequest={searchFocusRequest}
           header={explorerHeader}
+          environmentId={resolved?.environmentId ?? null}
+          onDiscardRequest={(file) =>
+            setDiscardTarget({ path: file.path, isNew: file.isUntracked || file.changeKind === "added" })
+          }
         />
         {isQuickOpen ? (
           <QuickOpen
@@ -570,6 +576,10 @@ export function Workspace({
               scope={scope}
               searchFocusRequest={searchFocusRequest}
               header={explorerHeader}
+          environmentId={resolved?.environmentId ?? null}
+          onDiscardRequest={(file) =>
+            setDiscardTarget({ path: file.path, isNew: file.isUntracked || file.changeKind === "added" })
+          }
             />
           </div>
           <div
@@ -627,7 +637,12 @@ export function Workspace({
               <GlyphButton
                 icon={Undo02Icon}
                 label="Discard changes"
-                onClick={() => setIsDiscardOpen(true)}
+                onClick={() =>
+                  setDiscardTarget({
+                    path: activeTab.path,
+                    isNew: git.isUntracked || git.changeKind === "added",
+                  })
+                }
               />
             ) : null}
             {activeTab?.file?.kind === "text" ? (
@@ -788,23 +803,26 @@ export function Workspace({
         )}
       </div>
 
-      <Dialog open={isDiscardOpen} onOpenChange={(open) => (isDiscarding ? null : setIsDiscardOpen(open))}>
+      <Dialog
+        open={discardTarget !== null}
+        onOpenChange={(open) => (isDiscarding || open ? null : setDiscardTarget(null))}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Discard changes?</DialogTitle>
             <DialogDescription>
-              {activeTab === null
+              {discardTarget === null
                 ? ""
-                : git.isUntracked || git.changeKind === "added"
-                  ? `${basename(activeTab.path)} is a new file. Discarding deletes it. This cannot be undone.`
-                  : `${basename(activeTab.path)} goes back to its last commit. Uncommitted edits are lost. This cannot be undone.`}
+                : discardTarget.isNew
+                  ? `${basename(discardTarget.path)} is a new file. Discarding deletes it. This cannot be undone.`
+                  : `${basename(discardTarget.path)} goes back to its last commit. Uncommitted edits are lost. This cannot be undone.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button
               type="button"
               className="h-8 cursor-pointer rounded-md px-3 text-sm text-muted-foreground hover:bg-state-hover hover:text-foreground"
-              onClick={() => setIsDiscardOpen(false)}
+              onClick={() => setDiscardTarget(null)}
               disabled={isDiscarding}
             >
               Cancel
