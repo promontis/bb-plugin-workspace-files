@@ -70,6 +70,14 @@ export const hostContract = defineRpcContract({
       .strict(),
     output: searchOutcomeSchema,
   },
+  /**
+   * Discard a file's uncommitted changes: restore it from HEAD, or remove it
+   * when HEAD does not have it (a new file). `path` is relative to `root`.
+   */
+  gitDiscard: {
+    input: z.object({ root: z.string().min(1), path: z.string().min(1) }).strict(),
+    output: z.object({ ok: z.literal(true) }),
+  },
   /** After a save: the next search must see what was written. */
   forget: {
     input: z.object({ absolutePath: z.string().min(1) }).strict(),

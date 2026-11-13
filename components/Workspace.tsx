@@ -6,6 +6,8 @@ import {
   useRpc,
 } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
+import { MoreVerticalIcon, Undo02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { basename, type FlatEntry } from "@/lib/tree";
@@ -16,6 +18,16 @@ import type { ResolvedScope, rpcContract } from "../server.js";
 import { Explorer } from "./Explorer";
 import { EditorTabs } from "./EditorTabs";
 import { FileView } from "./FileView";
+import { DiffView } from "./DiffView";
+import { useGitFile } from "./use-git-file";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 import { FileGlyph } from "./FileGlyph";
 import { QuickOpen } from "./QuickOpen";
 import { WorkspacePicker } from "./WorkspacePicker";
@@ -85,6 +97,12 @@ export function Workspace({
   // re-focus and reselect the field, which an unchanged boolean cannot signal.
   const [findRequest, setFindRequest] = useState(0);
   const [isFileMenuOpen, setIsFileMenuOpen] = useState(false);
+  // Conductor's diff controls: per-file view, two persisted toggles, discard.
+  const [viewByPath, setViewByPath] = useState<Record<string, FileDisplay>>({});
+  const [ignoreWhitespace, setIgnoreWhitespace] = useState(() => readStoredFlag(IGNORE_WHITESPACE_KEY));
+  const [wrapLines, setWrapLines] = useState(() => readStoredFlag(WRAP_LINES_KEY));
+  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
+  const [isDiscarding, setIsDiscarding] = useState(false);
   // ⌘⇧F focuses the explorer's text search, VS Code's binding for "search in files".
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   // A search hit to reveal: the file it is in, the line, and a nonce so opening
@@ -309,6 +327,40 @@ export function Workspace({
 
   const activeTab = tabs.activeTab;
   const resolved = tree.scope;
+
+  const git = useGitFile({
+    environmentId: resolved?.environmentId ?? null,
+    path: activeTab?.path ?? null,
+    ignoreWhitespace,
+  });
+  const display: FileDisplay =
+    activeTab !== null && git.isChanged ? (viewByPath[activeTab.path] ?? "unified") : "file";
+  const setDisplay = (next: FileDisplay) => {
+    if (activeTab === null) return;
+    const path = activeTab.path;
+    setViewByPath((current) => ({ ...current, [path]: next }));
+  };
+
+  const discardChanges = useCallback(async () => {
+    if (activeTab === null || scope === null) return;
+    const path = activeTab.path;
+    setIsDiscarding(true);
+    try {
+      await rpc.call("discard", { scope, path });
+      setIsDiscardOpen(false);
+      if (git.isUntracked) {
+        tabs.close(path);
+      } else {
+        tabs.reload();
+      }
+      loadTree(scope, includeHidden);
+      toast.success(`Discarded changes in ${basename(path)}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not discard the changes");
+    } finally {
+      setIsDiscarding(false);
+    }
+  }, [activeTab, git.isUntracked, includeHidden, loadTree, rpc, scope, tabs]);
 
   const openInPreview = useCallback(() => {
     if (activeTab === null || resolved === null) return;
@@ -584,20 +636,30 @@ export function Workspace({
           </button>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
+            {activeTab !== null && git.isChanged ? (
+              <GlyphButton
+                icon={Undo02Icon}
+                label="Discard changes"
+                onClick={() => setIsDiscardOpen(true)}
+              />
+            ) : null}
+            {activeTab?.file?.kind === "text" ? (
+              <ToolbarButton icon="Copy" label="Copy file contents" onClick={copyFileContents} />
+            ) : null}
+            {activeTab !== null && git.isChanged ? (
+              <DisplayToggle value={display} onChange={setDisplay} />
+            ) : null}
             {activeTab?.file?.kind === "text" ? (
               <>
-                <ToolbarButton
-                  icon="Copy"
-                  label="Copy file contents"
-                  onClick={copyFileContents}
-                />
-                <ModeToggle
-                  mode={activeTab.mode}
-                  isMarkdown={isMarkdownPath(activeTab.path)}
-                  canPreview={canPreview(activeTab)}
-                  canEdit={activeTab.file.editable}
-                  onChange={(next) => tabs.setMode(activeTab.path, next)}
-                />
+                {display === "file" ? (
+                  <ModeToggle
+                    mode={activeTab.mode}
+                    isMarkdown={isMarkdownPath(activeTab.path)}
+                    canPreview={canPreview(activeTab)}
+                    canEdit={activeTab.file.editable}
+                    onChange={(next) => tabs.setMode(activeTab.path, next)}
+                  />
+                ) : null}
                 {isDirty(activeTab) || activeTab.save.kind === "saving" ? (
                   <ToolbarButton
                     icon="Check"
@@ -616,14 +678,37 @@ export function Workspace({
                   if (!event.currentTarget.contains(event.relatedTarget)) setIsFileMenuOpen(false);
                 }}
               >
-                <ToolbarButton
-                  icon="MoreHorizontal"
+                <GlyphButton
+                  icon={MoreVerticalIcon}
                   label="More file actions"
                   isActive={isFileMenuOpen}
                   onClick={() => setIsFileMenuOpen((open) => !open)}
                 />
                 {isFileMenuOpen ? (
-                  <div className="absolute top-9 right-0 z-30 w-52 rounded-lg border border-border bg-popover p-1 shadow-lg">
+                  <div className="absolute top-9 right-0 z-30 w-60 rounded-lg border border-border bg-popover p-1 shadow-lg">
+                    {git.isChanged ? (
+                      <>
+                        <FileMenuToggle
+                          label="Hide whitespace changes"
+                          isOn={ignoreWhitespace}
+                          onToggle={() => {
+                            const next = !ignoreWhitespace;
+                            setIgnoreWhitespace(next);
+                            storeFlag(IGNORE_WHITESPACE_KEY, next);
+                          }}
+                        />
+                        <FileMenuToggle
+                          label="Wrap lines"
+                          isOn={wrapLines}
+                          onToggle={() => {
+                            const next = !wrapLines;
+                            setWrapLines(next);
+                            storeFlag(WRAP_LINES_KEY, next);
+                          }}
+                        />
+                        <div role="separator" className="-mx-1 my-1 h-px bg-border" />
+                      </>
+                    ) : null}
                     {activeTab.file?.kind === "text" ? (
                       <FileMenuButton icon="Search" label="Find in file" shortcut="⌘F" onClick={() => {
                         setIsFileMenuOpen(false);
@@ -652,6 +737,14 @@ export function Workspace({
                 ) : null}
               </div>
             ) : null}
+            {activeTab !== null && git.isChanged ? (
+              <ViewedCheckbox
+                isViewed={git.isViewed}
+                onChange={(next) => {
+                  void git.setViewed(next).catch(() => toast.error("Could not update Viewed"));
+                }}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -662,6 +755,15 @@ export function Workspace({
             truncated={tree.truncated}
             excluded={tree.excluded}
             onQuickOpen={() => setIsQuickOpen(true)}
+          />
+        ) : display !== "file" ? (
+          <DiffView
+            patch={git.patch}
+            layout={display}
+            wrapLines={wrapLines}
+            isTruncated={git.isPatchTruncated}
+            isBinary={git.isBinary}
+            isLoading={git.isLoading}
           />
         ) : (
           <FileView
@@ -684,6 +786,39 @@ export function Workspace({
           />
         )}
       </div>
+
+      <Dialog open={isDiscardOpen} onOpenChange={(open) => (isDiscarding ? null : setIsDiscardOpen(open))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Discard changes?</DialogTitle>
+            <DialogDescription>
+              {activeTab === null
+                ? ""
+                : git.isUntracked || git.changeKind === "added"
+                  ? `${basename(activeTab.path)} is a new file. Discarding deletes it. This cannot be undone.`
+                  : `${basename(activeTab.path)} goes back to its last commit. Uncommitted edits are lost. This cannot be undone.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              className="h-8 cursor-pointer rounded-md px-3 text-sm text-muted-foreground hover:bg-state-hover hover:text-foreground"
+              onClick={() => setIsDiscardOpen(false)}
+              disabled={isDiscarding}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="h-8 cursor-pointer rounded-md bg-destructive px-3 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              onClick={() => void discardChanges()}
+              disabled={isDiscarding}
+            >
+              {isDiscarding ? "Discarding…" : "Discard changes"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isQuickOpen ? (
         <QuickOpen
@@ -888,6 +1023,121 @@ function ToolbarButton({
         aria-hidden
         className={cn("size-3.5", isSpinning === true && "animate-spin")}
       />
+    </button>
+  );
+}
+
+type FileDisplay = "unified" | "split" | "file";
+
+const IGNORE_WHITESPACE_KEY = "workspace-files:ignore-whitespace";
+const WRAP_LINES_KEY = "workspace-files:wrap-lines";
+
+function readStoredFlag(key: string): boolean {
+  return safeRead(key) === "true";
+}
+
+function storeFlag(key: string, value: boolean): void {
+  safeWrite(key, value ? "true" : "false");
+}
+
+/** Conductor's three views of a changed file: unified diff, split diff, file. */
+function DisplayToggle({
+  value,
+  onChange,
+}: {
+  value: FileDisplay;
+  onChange: (next: FileDisplay) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="File display"
+      className="flex shrink-0 items-center gap-0.5 rounded-lg bg-surface-raised p-1"
+    >
+      <ModeSegment icon="AlignLeft" label="Unified diff" isSelected={value === "unified"} onClick={() => onChange("unified")} />
+      <ModeSegment icon="Columns2" label="Split diff" isSelected={value === "split"} onClick={() => onChange("split")} />
+      <ModeSegment icon="FileText" label="File" isSelected={value === "file"} onClick={() => onChange("file")} />
+    </div>
+  );
+}
+
+function GlyphButton({
+  icon,
+  label,
+  onClick,
+  isActive,
+}: {
+  icon: IconSvgElement;
+  label: string;
+  onClick: () => void;
+  isActive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors",
+        "hover:bg-state-hover hover:text-foreground",
+        "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none",
+        isActive === true && "bg-state-hover text-foreground",
+      )}
+    >
+      <HugeiconsIcon icon={icon} aria-hidden className="size-3.5" />
+    </button>
+  );
+}
+
+function FileMenuToggle({
+  label,
+  isOn,
+  onToggle,
+}: {
+  label: string;
+  isOn: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={isOn}
+      onClick={onToggle}
+      className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm text-foreground hover:bg-state-hover"
+    >
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {isOn ? <Icon name="Check" aria-hidden className="size-3.5 text-muted-foreground" /> : null}
+    </button>
+  );
+}
+
+function ViewedCheckbox({
+  isViewed,
+  onChange,
+}: {
+  isViewed: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={isViewed}
+      onClick={() => onChange(!isViewed)}
+      className="ml-1 flex h-7 shrink-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-sm text-muted-foreground hover:text-foreground"
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-4 items-center justify-center rounded-[4px] border",
+          isViewed ? "border-foreground bg-foreground text-background" : "border-muted-foreground",
+        )}
+      >
+        {isViewed ? <Icon name="Check" className="size-3" /> : null}
+      </span>
+      Viewed
     </button>
   );
 }

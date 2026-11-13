@@ -131,6 +131,11 @@ export const rpcContract = defineRpcContract({
     input: z.null(),
     output: z.object({ baseUrl: z.string(), expiresAtMs: z.number() }),
   },
+  /** Discard a file's uncommitted git changes (restore from HEAD or remove a new file). */
+  discard: {
+    input: z.object({ scope: scopeSchema, path: z.string().min(1) }).strict(),
+    output: z.object({ ok: z.literal(true) }),
+  },
   write: {
     input: z
       .object({
@@ -520,6 +525,19 @@ export default function plugin(bb: BbPluginApi) {
       const resolved = await resolveScope(scope);
       if (!resolved.ok) throw new Error(resolved.reason);
       return readWorkspaceFile(resolved.scope, relativePath);
+    },
+
+    async discard({ scope, path: relativePath }) {
+      // Same rule as write: never act on a cached scope.
+      const resolved = await resolveScopeUncached(scope);
+      if (!resolved.ok) throw new Error(resolved.reason);
+      await host.call(
+        "gitDiscard",
+        { root: resolved.scope.root, path: relativePath },
+        { hostId: resolved.scope.hostId },
+      );
+      bb.realtime.publish(CHANGED_CHANNEL, { scope, path: relativePath });
+      return { ok: true as const };
     },
 
     async write({ scope, path: relativePath, content, expectedSha256 }) {

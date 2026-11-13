@@ -1,4 +1,5 @@
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk/host";
+import { discardFileChanges } from "./lib/git-discard.js";
 import { ENTRY_LIMIT, hostContract } from "./lib/host-contract.js";
 import {
   createInProcessExecutor,
@@ -100,6 +101,11 @@ export default experimental_defineHostEntry({
           runningSearches.delete(input.root);
         }
       }
+    },
+
+    async gitDiscard({ root, path: relativePath }) {
+      texts.delete(await discardFileChanges(root, relativePath));
+      return { ok: true as const };
     },
 
     forget({ absolutePath }) {
