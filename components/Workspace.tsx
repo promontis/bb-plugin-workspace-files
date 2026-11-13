@@ -71,6 +71,8 @@ export interface WorkspaceProps {
   filePath: string | null;
   /** Called when the open file changes, so a routed surface can mirror it. */
   onOpenPath: (path: string | null) => void;
+  /** A file opened from the Changes tab (Conductor shows it in All changes). */
+  onOpenChange?: (path: string) => void;
   /** Omit to pin the surface to one workspace (the thread panel does). */
   onChangeScope?: (scope: ScopeRef) => void;
   /** `panel` renders only the explorer; `page` renders the full editor. */
@@ -81,6 +83,7 @@ export function Workspace({
   scope,
   filePath,
   onOpenPath,
+  onOpenChange,
   onChangeScope,
   variant,
 }: WorkspaceProps) {
@@ -531,6 +534,7 @@ export function Workspace({
             storeHidden(next);
           }}
           onOpenFile={openFile}
+          onOpenChange={onOpenChange}
           onOpenMatch={(path) => onOpenPath(path)}
           onRefresh={() => loadTree(scope, includeHidden)}
           onQuickOpen={() => setIsQuickOpen(true)}

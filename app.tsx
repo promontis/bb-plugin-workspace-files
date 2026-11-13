@@ -24,6 +24,7 @@ import "@/components/ui/icon-extended";
 import { Icon } from "@/components/ui/icon";
 import { formatRoute, parseRoute, type ScopeRef } from "@/lib/route";
 import { Workspace } from "@/components/Workspace";
+import { useGitChanges } from "@/components/use-git-file";
 
 const PANEL_PATH = "editor";
 const LAST_FILE_PREFIX = "workspace-files:last:";
@@ -69,7 +70,20 @@ type ThreadFileEventDetail = {
   environmentId: string;
   path: string | null;
   active: boolean;
+  /** Conductor's leading tab for the file: the file tab, or All changes. */
+  surface?: "file" | "changes";
 };
+
+const FIRST_CHANGE_EVENT = "workspace-files:open-first-change";
+const LAST_CHANGE_PREFIX = "workspace-files:last-change:";
+
+function rememberChange(environmentId: string, path: string) {
+  try {
+    window.localStorage.setItem(`${LAST_CHANGE_PREFIX}${environmentId}`, path);
+  } catch {
+    // Only restores the All changes tab.
+  }
+}
 
 function emitThreadFile(detail: ThreadFileEventDetail) {
   window.dispatchEvent(new CustomEvent<ThreadFileEventDetail>(THREAD_FILE_EVENT, { detail }));
@@ -106,6 +120,22 @@ function EnsureThreadFilesTab({
   useEnsureFilesTab(THREAD_FILES_TAB, environment !== null);
   const environmentId = environment?.id ?? null;
   const file = useThreadFile(threadId, environmentId);
+  // Conductor's All changes tab, clicked before any change was opened: show
+  // the first changed file.
+  const changes = useGitChanges(environmentId);
+  const firstChange = changes.files[0]?.path ?? null;
+  useEffect(() => {
+    if (environmentId === null) return;
+    const onRequest = (event: Event) => {
+      const detail = (event as CustomEvent<{ threadId: string; environmentId: string }>).detail;
+      if (detail.threadId !== threadId || detail.environmentId !== environmentId) return;
+      if (firstChange === null) return;
+      rememberChange(environmentId, firstChange);
+      emitThreadFile({ threadId, environmentId, path: firstChange, active: true, surface: "changes" });
+    };
+    window.addEventListener(FIRST_CHANGE_EVENT, onRequest);
+    return () => window.removeEventListener(FIRST_CHANGE_EVENT, onRequest);
+  }, [environmentId, firstChange, threadId]);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const [overlay, setOverlay] = useState<{
     top: number;
@@ -334,12 +364,21 @@ function ThreadFilesPanel({ threadId, environment }: ExperimentalThreadTabProps)
     },
     [environmentId, threadId],
   );
+  const onOpenChange = useCallback(
+    (path: string) => {
+      if (environmentId === null) return;
+      rememberChange(environmentId, path);
+      emitThreadFile({ threadId, environmentId, path, active: true, surface: "changes" });
+    },
+    [environmentId, threadId],
+  );
   if (environmentId === null) return null;
   return (
     <Workspace
       scope={{ kind: "environment", id: environmentId }}
       filePath={file.active ? file.path : null}
       onOpenPath={onOpenPath}
+      onOpenChange={onOpenChange}
       variant="panel"
     />
   );

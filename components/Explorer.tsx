@@ -38,6 +38,8 @@ export interface ExplorerProps {
   environmentId: string | null;
   /** Ask to discard one changed file (the caller confirms first). */
   onDiscardRequest: (file: ChangedFile) => void;
+  /** Open a file from the Changes tab; defaults to `onOpenFile`. */
+  onOpenChange?: (path: string) => void;
 }
 
 type PanelTab = "files" | "changes";
@@ -89,6 +91,7 @@ export function Explorer({
   header,
   environmentId,
   onDiscardRequest,
+  onOpenChange,
 }: ExplorerProps) {
   const [panelTab, setPanelTab] = useState<PanelTab>(() =>
     readStored(PANEL_TAB_KEY, ["files", "changes"] as const, "files"),
@@ -276,7 +279,7 @@ export function Explorer({
           changes={changes}
           layout={changesLayout}
           activePath={activePath}
-          onOpenFile={onOpenFile}
+          onOpenFile={onOpenChange ?? onOpenFile}
           onDiscard={onDiscardRequest}
         />
       ) : (
