@@ -136,6 +136,11 @@ export const rpcContract = defineRpcContract({
     input: z.null(),
     output: z.object({ baseUrl: z.string(), expiresAtMs: z.number() }),
   },
+  /** Fast-forward the workspace to its base branch ("Pull latest from main"). */
+  pullBase: {
+    input: z.object({ scope: scopeSchema, baseBranch: z.string().min(1).max(256) }).strict(),
+    output: z.object({ ok: z.literal(true) }),
+  },
   /** Discard a file's uncommitted git changes (restore from HEAD or remove a new file). */
   discard: {
     input: z.object({ scope: scopeSchema, path: z.string().min(1) }).strict(),
@@ -564,6 +569,17 @@ export default function plugin(bb: BbPluginApi) {
       const resolved = await resolveScope(scope);
       if (!resolved.ok) throw new Error(resolved.reason);
       return readWorkspaceFile(resolved.scope, relativePath);
+    },
+
+    async pullBase({ scope, baseBranch }) {
+      const resolved = await resolveScopeUncached(scope);
+      if (!resolved.ok) throw new Error(resolved.reason);
+      await host.call(
+        "gitFastForward",
+        { root: resolved.scope.root, baseBranch },
+        { hostId: resolved.scope.hostId },
+      );
+      return { ok: true as const };
     },
 
     async discard({ scope, path: relativePath }) {

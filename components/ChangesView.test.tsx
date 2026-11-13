@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChangesView } from "./ChangesView";
 import type { ChangedFile, GitChangesState } from "./use-git-file";
 
@@ -22,6 +22,8 @@ const changes: GitChangesState = {
   insertions: 6,
   deletions: 2,
   isLoading: false,
+  baseBranch: "origin/main",
+  behindCount: 0,
 };
 
 const noop = () => undefined;
@@ -48,5 +50,41 @@ describe("ChangesView", () => {
     expect(screen.queryByRole("button", { name: "Open docs/viewer-design.md" })).toBeNull();
     expect(screen.getByRole("button", { name: "Open src/viewer/light.ts" })).toBeTruthy();
     expect(screen.getByText(/1 viewed \(hidden\)/)).toBeTruthy();
+  });
+});
+
+describe("ChangesView empty state", () => {
+  it("offers Conductor's pull when the checkout is behind its base", () => {
+    const onPullBase = vi.fn();
+    render(
+      <ChangesView
+        changes={{ ...changes, files: [], insertions: 0, deletions: 0, behindCount: 1 }}
+        layout="list"
+        hideViewed={false}
+        activePath={null}
+        onOpenFile={noop}
+        onDiscard={noop}
+        onPullBase={onPullBase}
+      />,
+    );
+    expect(screen.getByText("No file changes yet")).toBeTruthy();
+    expect(screen.getByText("Changes appear here.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Pull latest from main \(1 commit\)/ }));
+    expect(onPullBase).toHaveBeenCalledWith("origin/main");
+  });
+
+  it("explains a workspace without git", () => {
+    render(
+      <ChangesView
+        changes={{ ...changes, isAvailable: false, files: [], baseBranch: null }}
+        layout="list"
+        hideViewed={false}
+        activePath={null}
+        onOpenFile={noop}
+        onDiscard={noop}
+      />,
+    );
+    expect(screen.getByText("This workspace is not a git checkout.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Pull latest/ })).toBeNull();
   });
 });

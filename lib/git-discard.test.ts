@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { discardFileChanges, insideRoot } from "./git-discard";
+import { discardFileChanges, fastForwardToBase, insideRoot } from "./git-discard";
 
 let root: string;
 const git = (...args: string[]) =>
@@ -47,5 +47,34 @@ describe("discardFileChanges", () => {
   it("refuses paths outside the workspace", () => {
     expect(() => insideRoot(root, "../escape.txt")).toThrow();
     expect(() => insideRoot(root, ".")).toThrow();
+  });
+});
+
+describe("fastForwardToBase", () => {
+  it("fast-forwards a branch that is only behind its base", async () => {
+    const start = git("rev-parse", "--abbrev-ref", "HEAD").trim();
+    git("checkout", "-q", "-b", "base");
+    writeFileSync(path.join(root, "kept.txt"), "newer\n");
+    git("commit", "-q", "-am", "newer");
+    git("checkout", "-q", start);
+    await fastForwardToBase(root, "base");
+    expect(readFileSync(path.join(root, "kept.txt"), "utf8")).toBe("newer\n");
+  });
+
+  it("refuses to move a branch with commits of its own", async () => {
+    const start = git("rev-parse", "--abbrev-ref", "HEAD").trim();
+    git("checkout", "-q", "-b", "base");
+    writeFileSync(path.join(root, "kept.txt"), "base\n");
+    git("commit", "-q", "-am", "base");
+    git("checkout", "-q", start);
+    writeFileSync(path.join(root, "own.txt"), "mine\n");
+    git("add", "own.txt");
+    git("commit", "-q", "-m", "own");
+    await expect(fastForwardToBase(root, "base")).rejects.toThrow(/own commits/);
+    expect(readFileSync(path.join(root, "kept.txt"), "utf8")).toBe("original\n");
+  });
+
+  it("rejects something that is not a branch name", async () => {
+    await expect(fastForwardToBase(root, "--upload-pack=x")).rejects.toThrow();
   });
 });

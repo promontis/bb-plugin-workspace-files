@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowDown01Icon, FolderOpenIcon, Undo02Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowDown01Icon,
+  ArrowDown02Icon,
+  FolderOpenIcon,
+  GitPullRequestArrowIcon,
+  Undo02Icon,
+} from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { groupByDirectory, splitPath } from "@/lib/changes";
 import type { ChangedFile, GitChangesState } from "./use-git-file";
@@ -25,6 +31,7 @@ export function ChangesView({
   activePath,
   onOpenFile,
   onDiscard,
+  onPullBase,
 }: {
   changes: GitChangesState;
   layout: ChangesLayout;
@@ -33,18 +40,35 @@ export function ChangesView({
   activePath: string | null;
   onOpenFile: (path: string) => void;
   onDiscard: (file: ChangedFile) => void;
+  /** Fast-forward to the base branch; omit where that is not offered. */
+  onPullBase?: (baseBranch: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
-  if (!changes.isAvailable) {
+  const count = changes.files.length;
+  if (!changes.isAvailable || count === 0) {
+    const base = changes.baseBranch;
     return (
-      <p className="px-4 py-3 text-sm" style={{ color: MUTED }}>
-        {changes.isLoading ? "Reading changes…" : "This workspace is not a git checkout."}
-      </p>
+      <EmptyChanges
+        subtitle={
+          changes.isLoading
+            ? "Reading changes…"
+            : changes.isAvailable
+              ? "Changes appear here."
+              : "This workspace is not a git checkout."
+        }
+        pull={
+          changes.isAvailable && base !== null && changes.behindCount > 0 && onPullBase !== undefined
+            ? {
+                label: `Pull latest from ${base.replace(/^[^/]+\//, "")} (${changes.behindCount} ${changes.behindCount === 1 ? "commit" : "commits"})`,
+                onClick: () => onPullBase(base),
+              }
+            : null
+        }
+      />
     );
   }
 
-  const count = changes.files.length;
   const viewedCount = changes.files.reduce((total, file) => total + (file.isViewed ? 1 : 0), 0);
   const shown = hideViewed ? changes.files.filter((file) => !file.isViewed) : changes.files;
   const row = (file: ChangedFile, label: React.ReactNode) => (
@@ -134,6 +158,44 @@ export function ChangesView({
           })
         )}
       </div>
+    </div>
+  );
+}
+
+/** Conductor's empty Changes tab. */
+function EmptyChanges({
+  subtitle,
+  pull,
+}: {
+  subtitle: string;
+  pull: { label: string; onClick: () => void } | null;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-6 pb-10 text-center">
+      <HugeiconsIcon
+        icon={GitPullRequestArrowIcon}
+        aria-hidden
+        strokeWidth={1}
+        className="mb-2 size-9"
+        style={{ color: MUTED }}
+      />
+      <p className="text-[15px] font-medium" style={{ color: MUTED }}>
+        No file changes yet
+      </p>
+      <p className="text-[13px]" style={{ color: "#6d6a67" }}>
+        {subtitle}
+      </p>
+      {pull === null ? null : (
+        <button
+          type="button"
+          onClick={pull.onClick}
+          className="mt-1 flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-sm hover:bg-state-hover hover:text-foreground"
+          style={{ color: MUTED }}
+        >
+          <HugeiconsIcon icon={ArrowDown02Icon} aria-hidden className="size-3.5" />
+          {pull.label}
+        </button>
+      )}
     </div>
   );
 }

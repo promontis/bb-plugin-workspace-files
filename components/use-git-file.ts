@@ -31,7 +31,10 @@ const gitContract = defineRpcContract({
         outcome: z.string(),
         workspace: z
           .looseObject({
-            mergeBase: z.looseObject({ mergeBaseBranch: z.string() }).nullable().optional(),
+            mergeBase: z
+              .looseObject({ mergeBaseBranch: z.string(), behindCount: z.number().optional() })
+              .nullable()
+              .optional(),
           })
           .optional(),
       }),
@@ -303,6 +306,10 @@ export interface GitChangesState {
   insertions: number;
   deletions: number;
   isLoading: boolean;
+  /** The branch the workspace compares with, e.g. "origin/main"; null without one. */
+  baseBranch: string | null;
+  /** Commits on the base branch this checkout does not have yet. */
+  behindCount: number;
 }
 
 /**
@@ -386,5 +393,7 @@ export function useGitChanges(environmentId: string | null): GitChangesState {
     insertions: changed.reduce((total, file) => total + file.additions, 0),
     deletions: changed.reduce((total, file) => total + file.deletions, 0),
     isLoading: status.isLoading || files.isLoading,
+    baseBranch: mergeBaseBranch === undefined || mergeBaseBranch === "" ? null : mergeBaseBranch,
+    behindCount: row?.workspace?.mergeBase?.behindCount ?? 0,
   };
 }

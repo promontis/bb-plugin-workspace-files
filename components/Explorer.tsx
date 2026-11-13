@@ -40,6 +40,8 @@ export interface ExplorerProps {
   onDiscardRequest: (file: ChangedFile) => void;
   /** Open a file from the Changes tab; defaults to `onOpenFile`. */
   onOpenChange?: (path: string) => void;
+  /** "Pull latest from main" in the empty Changes tab. */
+  onPullBase?: (baseBranch: string) => void;
 }
 
 type PanelTab = "files" | "changes";
@@ -93,6 +95,7 @@ export function Explorer({
   environmentId,
   onDiscardRequest,
   onOpenChange,
+  onPullBase,
 }: ExplorerProps) {
   const [panelTab, setPanelTab] = useState<PanelTab>(() =>
     readStored(PANEL_TAB_KEY, ["files", "changes"] as const, "files"),
@@ -217,15 +220,14 @@ export function Explorer({
         className="flex h-10 shrink-0 items-center gap-1 border-b border-border-hairline px-2"
       >
         <PanelTabButton label="All files" isSelected={panelTab === "files"} onClick={() => selectTab("files")} />
-        {changes.isAvailable ? (
-          <PanelTabButton
-            label="Changes"
-            count={changes.files.length}
-            isSelected={panelTab === "changes"}
-            onClick={() => selectTab("changes")}
-          />
-        ) : null}
-        {panelTab === "changes" && changes.isAvailable ? (
+        {/* Always there, like Conductor, even without git or changes. */}
+        <PanelTabButton
+          label="Changes"
+          count={changes.files.length}
+          isSelected={panelTab === "changes"}
+          onClick={() => selectTab("changes")}
+        />
+        {panelTab === "changes" ? (
           <div className="ml-auto flex items-center gap-0.5">
             <ExplorerAction
               icon={hideViewed ? "EyeOff" : "Eye"}
@@ -287,7 +289,7 @@ export function Explorer({
         )}
       </div>
 
-      {panelTab === "changes" && changes.isAvailable ? (
+      {panelTab === "changes" ? (
         <ChangesView
           changes={changes}
           layout={changesLayout}
@@ -295,6 +297,7 @@ export function Explorer({
           activePath={activePath}
           onOpenFile={onOpenChange ?? onOpenFile}
           onDiscard={onDiscardRequest}
+          onPullBase={onPullBase}
         />
       ) : (
       <>
@@ -450,7 +453,14 @@ function PanelTabButton({
       )}
     >
       {label}
-      {count === undefined ? null : <span className="text-muted-foreground tabular-nums">{count}</span>}
+      {count === undefined ? null : (
+        <span
+          className="text-muted-foreground tabular-nums"
+          style={{ fontFamily: '"Conductor Geist Mono", ui-monospace, monospace' }}
+        >
+          {count}
+        </span>
+      )}
     </button>
   );
 }

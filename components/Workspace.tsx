@@ -362,6 +362,20 @@ export function Workspace({
     }
   };
 
+  const pullBase = useCallback(
+    async (baseBranch: string) => {
+      if (scope === null) return;
+      try {
+        await rpc.call("pullBase", { scope, baseBranch });
+        loadTree(scope, includeHidden);
+        toast.success(`Pulled the latest ${baseBranch.replace(/^[^/]+\//, "")}`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not pull");
+      }
+    },
+    [includeHidden, loadTree, rpc, scope],
+  );
+
   const discardChanges = useCallback(async () => {
     if (discardTarget === null || scope === null) return;
     const { path, isNew } = discardTarget;
@@ -542,6 +556,7 @@ export function Workspace({
           searchFocusRequest={searchFocusRequest}
           header={explorerHeader}
           environmentId={resolved?.environmentId ?? null}
+          onPullBase={(base) => void pullBase(base)}
           onDiscardRequest={(file) =>
             setDiscardTarget({ path: file.path, isNew: file.isUntracked || file.changeKind === "added" })
           }
@@ -595,6 +610,7 @@ export function Workspace({
               searchFocusRequest={searchFocusRequest}
               header={explorerHeader}
           environmentId={resolved?.environmentId ?? null}
+          onPullBase={(base) => void pullBase(base)}
           onDiscardRequest={(file) =>
             setDiscardTarget({ path: file.path, isNew: file.isUntracked || file.changeKind === "added" })
           }

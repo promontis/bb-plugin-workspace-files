@@ -78,6 +78,11 @@ export const hostContract = defineRpcContract({
     input: z.object({ root: z.string().min(1), path: z.string().min(1) }).strict(),
     output: z.object({ ok: z.literal(true) }),
   },
+  /** Fast-forward the checkout to its base branch (fetch, then merge --ff-only). */
+  gitFastForward: {
+    input: z.object({ root: z.string().min(1), baseBranch: z.string().min(1).max(256) }).strict(),
+    output: z.object({ ok: z.literal(true) }),
+  },
   /** After a save: the next search must see what was written. */
   forget: {
     input: z.object({ absolutePath: z.string().min(1) }).strict(),

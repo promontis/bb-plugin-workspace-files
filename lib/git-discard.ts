@@ -44,3 +44,23 @@ export async function discardFileChanges(root: string, relativePath: string): Pr
   }
   return absolute;
 }
+
+/**
+ * Bring the checkout up to date with `baseBranch` (e.g. "origin/main") the
+ * safe way: fetch it, then fast-forward only. A branch with commits of its
+ * own is left untouched and the error says so.
+ */
+export async function fastForwardToBase(root: string, baseBranch: string): Promise<void> {
+  if (!/^[\w./-]+$/.test(baseBranch) || baseBranch.startsWith("-")) {
+    throw new Error("Not a branch name.");
+  }
+  const slash = baseBranch.indexOf("/");
+  if (slash > 0) {
+    await git(root, ["fetch", "--quiet", baseBranch.slice(0, slash), baseBranch.slice(slash + 1)]).catch(() => undefined);
+  }
+  try {
+    await git(root, ["merge", "--ff-only", "--quiet", baseBranch]);
+  } catch {
+    throw new Error(`This branch has its own commits, so it cannot fast-forward to ${baseBranch}.`);
+  }
+}
