@@ -424,7 +424,10 @@ export function Workspace({
 
   const explorerHeader = useMemo(
     () => (
-      <div className="flex shrink-0 items-center gap-1 px-2 pt-2 pb-1.5">
+      <div
+        data-workspace-files-explorer-header=""
+        className="flex h-10 shrink-0 items-center gap-1 border-b border-border-hairline px-2"
+      >
         {onChangeScope === undefined ? (
           <div className="flex min-w-0 flex-1 items-center gap-1.5 px-1 text-xs">
             <Icon
