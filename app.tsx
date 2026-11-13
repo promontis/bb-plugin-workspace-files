@@ -25,7 +25,6 @@ import { Icon } from "@/components/ui/icon";
 import { formatRoute, parseRoute, type ScopeRef } from "@/lib/route";
 import { Workspace } from "@/components/Workspace";
 import { useGitChanges } from "@/components/use-git-file";
-import { useDefaultTerminalSplit } from "@/components/use-default-terminal-split";
 
 const PANEL_PATH = "editor";
 const LAST_FILE_PREFIX = "workspace-files:last:";
@@ -121,7 +120,6 @@ function EnsureThreadFilesTab({
   useEnsureFilesTab(THREAD_FILES_TAB, environment !== null);
   const environmentId = environment?.id ?? null;
   const file = useThreadFile(threadId, environmentId);
-  useDefaultTerminalSplit({ threadId, enabled: environment !== null, topTab: THREAD_FILES_TAB });
   // Conductor's All changes tab, clicked before any change was opened: show
   // the first changed file.
   const changes = useGitChanges(environmentId);
