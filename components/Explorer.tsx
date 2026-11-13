@@ -32,7 +32,11 @@ export interface ExplorerProps {
   header: React.ReactNode;
 }
 
-const INDENT_PER_LEVEL_PX = 10;
+// Row geometry measured from Conductor's file tree: 20px per level, the
+// first-level mark 18px in, 28px rows.
+const INDENT_PER_LEVEL_PX = 20;
+const ROOT_INDENT_PX = 18;
+const TREE_FONT_FAMILY = '"Conductor Geist Mono", ui-monospace, "SFMono-Regular", monospace';
 const EXPANDED_STORAGE_PREFIX = "workspace-files:expanded:";
 
 /** Rows mounted at once. Beyond this the footer says how many were held back. */
@@ -149,7 +153,7 @@ export function Explorer({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-recessed">
       {header}
 
-      <div className="flex shrink-0 items-center gap-1.5 px-2 pb-2">
+      <div className="flex shrink-0 items-center gap-1.5 px-2 pt-2 pb-2">
         <div className="relative min-w-0 flex-1">
           <Icon
             name="Search"
@@ -336,23 +340,17 @@ function ExplorerRow({
         onClick={() =>
           isDirectory ? onToggle(node.path) : onOpenFile(node.path)
         }
-        style={{ paddingLeft: 8 + depth * INDENT_PER_LEVEL_PX }}
+        style={{
+          paddingLeft: ROOT_INDENT_PX + depth * INDENT_PER_LEVEL_PX,
+          fontFamily: TREE_FONT_FAMILY,
+        }}
         className={cn(
-          "flex h-6 w-full min-w-full cursor-pointer items-center gap-1.5 pr-3 text-left text-[13px]",
-          "text-foreground/90 hover:bg-state-hover",
+          "flex h-7 w-full min-w-full cursor-pointer items-center gap-2.5 pr-3 text-left text-xs",
+          "text-foreground hover:bg-state-hover",
           "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none focus-visible:-outline-offset-1",
           isActive && "bg-surface-selected text-foreground",
         )}
       >
-        {isDirectory ? (
-          <Icon
-            name={isExpanded ? "ChevronDown" : "ChevronRight"}
-            aria-hidden
-            className="size-3 shrink-0 text-muted-foreground"
-          />
-        ) : (
-          <span aria-hidden className="w-3 shrink-0" />
-        )}
         <FileGlyph path={node.path} kind={node.kind} isExpanded={isExpanded} />
         <span className="truncate">
           <HighlightedText text={node.name} query={query} />
