@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   experimental_copyToClipboard,
+  experimental_Diff as HostDiff,
   useBbNavigate,
   useRealtime,
   useRpc,
@@ -19,7 +20,6 @@ import { Explorer } from "./Explorer";
 import { EditorTabs } from "./EditorTabs";
 import { FileView } from "./FileView";
 import { DiffView } from "./DiffView";
-import { MonacoDiffEditor } from "./monaco/MonacoEditor";
 import { useMonaco } from "./monaco/use-monaco";
 import { useGitFile } from "./use-git-file";
 import {
@@ -100,7 +100,12 @@ export function Workspace({
   const [findRequest, setFindRequest] = useState(0);
   const [isFileMenuOpen, setIsFileMenuOpen] = useState(false);
   // Conductor's diff controls: per-file view, two persisted toggles, discard.
-  const [viewByPath, setViewByPath] = useState<Record<string, FileDisplay>>({});
+  // Files switched to the plain file view; every other changed file shows the
+  // diff in the remembered layout (side by side by default, as Conductor).
+  const [fileViewPaths, setFileViewPaths] = useState<ReadonlySet<string>>(new Set());
+  const [diffLayout, setDiffLayout] = useState<"unified" | "split">(() =>
+    safeRead(DIFF_LAYOUT_KEY) === "unified" ? "unified" : "split",
+  );
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(() => readStoredFlag(IGNORE_WHITESPACE_KEY));
   const [wrapLines, setWrapLines] = useState(() => readStoredFlag(WRAP_LINES_KEY));
   // The file the discard dialog asks about; from the toolbar or the Changes list.
@@ -338,11 +343,20 @@ export function Workspace({
     ignoreWhitespace,
   });
   const display: FileDisplay =
-    activeTab !== null && git.isChanged ? (viewByPath[activeTab.path] ?? "unified") : "file";
+    activeTab === null || !git.isChanged || fileViewPaths.has(activeTab.path) ? "file" : diffLayout;
   const setDisplay = (next: FileDisplay) => {
     if (activeTab === null) return;
     const path = activeTab.path;
-    setViewByPath((current) => ({ ...current, [path]: next }));
+    setFileViewPaths((current) => {
+      const updated = new Set(current);
+      if (next === "file") updated.add(path);
+      else updated.delete(path);
+      return updated;
+    });
+    if (next !== "file") {
+      setDiffLayout(next);
+      safeWrite(DIFF_LAYOUT_KEY, next);
+    }
   };
 
   const discardChanges = useCallback(async () => {
@@ -757,20 +771,27 @@ export function Workspace({
             excluded={tree.excluded}
             onQuickOpen={() => setIsQuickOpen(true)}
           />
-        ) : display !== "file" &&
-          monaco !== null &&
-          git.originalContent !== null &&
-          activeTab.file?.kind === "text" ? (
-          <MonacoDiffEditor
-            key={activeTab.path}
-            monaco={monaco}
-            path={activeTab.path}
-            original={git.originalContent}
-            modified={activeTab.draft ?? activeTab.file.content}
-            sideBySide={display === "split"}
-            ignoreWhitespace={ignoreWhitespace}
-            wrapLines={wrapLines}
-          />
+        ) : display !== "file" && git.patch !== null && !git.isPatchTruncated && !git.isBinary ? (
+          // Conductor's diff: BB's own diff renderer (@pierre/diffs) on the active
+          // code theme — collapsed "N unmodified lines" bars that expand when both
+          // full sides are supplied, hatched gaps, change bars, word highlights.
+          <div key={activeTab.path} data-workspace-files-host-diff="" className="flex min-h-0 flex-1 flex-col overflow-auto">
+            <HostDiff
+              patch={git.patch}
+              path={activeTab.path}
+              view={display === "split" ? "split" : "unified"}
+              overflow={wrapLines ? "wrap" : "scroll"}
+              {...(git.originalContent !== null && activeTab.file?.kind === "text"
+                ? {
+                    experimental_fullFileContents: {
+                      old: { path: activeTab.path, content: git.originalContent },
+                      // The patch describes the file on disk, not an unsaved draft.
+                      new: { path: activeTab.path, content: activeTab.file.content },
+                    },
+                  }
+                : {})}
+            />
+          </div>
         ) : display !== "file" ? (
           <DiffView
             patch={git.patch}
@@ -1049,6 +1070,7 @@ function ToolbarButton({
 type FileDisplay = "unified" | "split" | "file";
 
 const IGNORE_WHITESPACE_KEY = "workspace-files:ignore-whitespace";
+const DIFF_LAYOUT_KEY = "workspace-files:diff-layout";
 const WRAP_LINES_KEY = "workspace-files:wrap-lines";
 
 function readStoredFlag(key: string): boolean {
