@@ -1,0 +1,103 @@
+{
+  "name": "bb-plugin-workspace-files",
+  "version": "0.2.0",
+  "description": "VS Code-style file explorer and editor for the project or worktree behind a thread: search in files across the whole project, a file tree, editor tabs, syntax-highlighted viewing, find in file, and edit with save.",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.48",
+    "bbPluginSdk": ">=0.6.141"
+  },
+  "bb": {
+    "name": "Workspace Files",
+    "description": "VS Code-style file explorer and editor for the project or worktree behind a thread: search in files across the whole project, a file tree, editor tabs, syntax-highlighted viewing, find in file, and edit with save.",
+    "branding": {
+      "icon": "./assets/icon.svg"
+    },
+    "server": "./server.ts",
+    "host": "./host.ts",
+    "app": "./app.tsx",
+    "skills": []
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@hugeicons/core-free-icons": "^4.1.3",
+    "@hugeicons/react": "^1.1.6",
+    "@radix-ui/react-checkbox": "^1.3.7",
+    "@radix-ui/react-slot": "^1.3.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.141",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "better-sqlite3": "^12.0.0",
+    "hono": "^4.11.9",
+    "typescript": "^5.7.0",
+    "@pierre/diffs": "~1.2.12",
+    "@radix-ui/react-alert-dialog": "^1.2.1",
+    "@radix-ui/react-context-menu": "^2.4.1",
+    "@radix-ui/react-dialog": "^1.3.1",
+    "@radix-ui/react-dropdown-menu": "^2.2.1",
+    "@radix-ui/react-hover-card": "^1.2.1",
+    "@radix-ui/react-menubar": "^1.2.1",
+    "@radix-ui/react-navigation-menu": "^1.4.1",
+    "@radix-ui/react-popover": "^1.3.1",
+    "@radix-ui/react-select": "^2.4.1",
+    "@radix-ui/react-tooltip": "^1.4.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "sonner": "^1.7.4",
+    "tailwind-merge": "^3.7.0",
+    "vaul": "^1.1.2",
+    "vitest": "^3.2.4",
+    "jsdom": "^26.1.0",
+    "@testing-library/react": "^16.3.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/abdoutelb/bb-plugin-files-editor#readme",
+  "bugs": {
+    "url": "https://github.com/abdoutelb/bb-plugin-files-editor/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abdoutelb/bb-plugin-files-editor.git"
+  },
+  "keywords": [
+    "bb-plugin",
+    "files",
+    "file-explorer",
+    "grep",
+    "full-text-search",
+    "search-in-files",
+    "file-browser",
+    "file-tree",
+    "editor",
+    "code-editor",
+    "text-editor",
+    "syntax-highlighting",
+    "find-in-file",
+    "vscode",
+    "workspace"
+  ],
+  "files": [
+    "assets",
+    "docs",
+    "dist",
+    "server.ts",
+    "host.ts",
+    "app.tsx",
+    "components",
+    "lib",
+    "hooks",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ]
+}
