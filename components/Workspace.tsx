@@ -477,27 +477,12 @@ export function Workspace({
     target.addEventListener("pointerup", stop);
   };
 
+  // Conductor's file panel names no workspace; only the page variant keeps
+  // its workspace picker above the toolbar.
   const explorerHeader = useMemo(
-    () => (
-      <div
-        data-workspace-files-explorer-header=""
-        className="flex h-10 shrink-0 items-center gap-1 border-b border-border-hairline px-2"
-      >
-        {onChangeScope === undefined ? (
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 px-1 text-xs">
-            <Icon
-              name={resolved?.environmentId === null ? "Folder" : "GitBranch"}
-              aria-hidden
-              className="size-3.5 shrink-0 text-muted-foreground"
-            />
-            <span className="truncate font-medium text-foreground">
-              {resolved?.label ?? "Workspace"}
-            </span>
-            <span className="truncate text-muted-foreground">
-              {resolved?.sublabel ?? ""}
-            </span>
-          </div>
-        ) : (
+    () =>
+      onChangeScope === undefined ? null : (
+        <div className="flex h-10 shrink-0 items-center gap-1 px-2">
           <WorkspacePicker
             current={resolved}
             onSelect={(next) => {
@@ -505,9 +490,8 @@ export function Workspace({
               setIsQuickOpen(false);
             }}
           />
-        )}
-      </div>
-    ),
+        </div>
+      ),
     [onChangeScope, resolved],
   );
 

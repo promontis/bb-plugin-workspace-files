@@ -33,9 +33,10 @@ export interface ExplorerProps {
 }
 
 // Row geometry measured from Conductor's file tree: 20px per level, the
-// first-level mark 18px in, 28px rows.
+// first-level mark 18px in, 28px rows. Rows sit 8px inside the panel
+// (Conductor's rounded hover), so the row's own padding is 10px.
 const INDENT_PER_LEVEL_PX = 20;
-const ROOT_INDENT_PX = 18;
+const ROOT_INDENT_PX = 10;
 const TREE_FONT_FAMILY = '"Conductor Geist Mono", ui-monospace, "SFMono-Regular", monospace';
 const EXPANDED_STORAGE_PREFIX = "workspace-files:expanded:";
 
@@ -71,11 +72,19 @@ export function Explorer({
   const activeRowRef = useRef<HTMLButtonElement | null>(null);
 
   const isSearching = query !== "" && scope !== null;
+  // Conductor keeps search behind a toolbar button; the field shows while open
+  // or while it holds a query.
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const showSearch = isSearchOpen || query !== "";
 
   useEffect(() => {
     if (searchFocusRequest === 0) return;
-    inputRef.current?.focus();
-    inputRef.current?.select();
+    setIsSearchOpen(true);
+    // The field mounts with the state change; focus it on the next frame.
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
   }, [searchFocusRequest]);
 
   const tree = useMemo(() => buildTree(entries), [entries]);
@@ -150,9 +159,48 @@ export function Explorer({
   );
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-recessed">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-sidebar">
       {header}
 
+      <div
+        data-workspace-files-explorer-header=""
+        className="flex h-10 shrink-0 items-center gap-1 border-b border-border-hairline px-2"
+      >
+        <span className="flex h-7 items-center rounded-md bg-surface-raised px-2.5 text-sm text-foreground">
+          All files
+        </span>
+        <div className="ml-auto flex items-center gap-0.5">
+          <ExplorerAction
+            icon="Search"
+            label="Search in files (⌘⇧F)"
+            isActive={showSearch}
+            onClick={() => {
+              if (showSearch) {
+                setIsSearchOpen(false);
+                setQuery("");
+              } else {
+                setIsSearchOpen(true);
+                requestAnimationFrame(() => inputRef.current?.focus());
+              }
+            }}
+          />
+          <ExplorerAction icon="FileText" label="Go to file by name (⌘P)" onClick={onQuickOpen} />
+          <ExplorerAction
+            icon={includeHidden ? "Eye" : "EyeOff"}
+            label={includeHidden ? "Hide dotfiles" : "Show dotfiles"}
+            isActive={includeHidden}
+            onClick={() => onToggleHidden(!includeHidden)}
+          />
+          <ExplorerAction
+            icon="ArrowReloadHorizontal"
+            label="Refresh files"
+            isSpinning={isLoading}
+            onClick={onRefresh}
+          />
+        </div>
+      </div>
+
+      {showSearch ? (
       <div className="flex shrink-0 items-center gap-1.5 px-2 pt-2 pb-2">
         <div className="relative min-w-0 flex-1">
           <Icon
@@ -166,9 +214,10 @@ export function Explorer({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Escape" && query !== "") {
+              if (event.key === "Escape") {
                 event.stopPropagation();
-                setQuery("");
+                if (query !== "") setQuery("");
+                else setIsSearchOpen(false);
                 return;
               }
               if (event.key === "Enter") {
@@ -221,24 +270,8 @@ export function Explorer({
             />
           </div>
         </div>
-        <ExplorerAction
-          icon="Search"
-          label="Go to file by name (⌘P)"
-          onClick={onQuickOpen}
-        />
-        <ExplorerAction
-          icon={includeHidden ? "Eye" : "EyeOff"}
-          label={includeHidden ? "Hide dotfiles" : "Show dotfiles"}
-          isActive={includeHidden}
-          onClick={() => onToggleHidden(!includeHidden)}
-        />
-        <ExplorerAction
-          icon="ArrowReloadHorizontal"
-          label="Refresh files"
-          isSpinning={isLoading}
-          onClick={onRefresh}
-        />
       </div>
+      ) : null}
 
       {isSearching ? (
         <SearchResults
@@ -280,13 +313,16 @@ export function Explorer({
         </div>
       )}
 
-      <div className="shrink-0 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
-        {`${fileCount.toLocaleString()} files`}
-        {!isSearching && allRows.length > rows.length
-          ? ` · showing first ${ROW_LIMIT.toLocaleString()}`
-          : ""}
-        {truncated ? " · listing truncated" : ""}
-      </div>
+      {/* Conductor shows no file count; only say when the list is cut short. */}
+      {(!isSearching && allRows.length > rows.length) || truncated ? (
+        <div className="shrink-0 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+          {`${fileCount.toLocaleString()} files`}
+          {!isSearching && allRows.length > rows.length
+            ? ` · showing first ${ROW_LIMIT.toLocaleString()}`
+            : ""}
+          {truncated ? " · listing truncated" : ""}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -329,14 +365,13 @@ function ExplorerRow({
   const isDirectory = node.kind === "directory";
 
   return (
-    <li role="none">
+    <li role="none" className="px-2">
       <button
         ref={activeRef}
         type="button"
         role="treeitem"
         aria-selected={isActive}
         aria-expanded={isDirectory ? isExpanded : undefined}
-        title={node.path}
         onClick={() =>
           isDirectory ? onToggle(node.path) : onOpenFile(node.path)
         }
@@ -345,10 +380,10 @@ function ExplorerRow({
           fontFamily: TREE_FONT_FAMILY,
         }}
         className={cn(
-          "flex h-7 w-full min-w-full cursor-pointer items-center gap-2.5 pr-3 text-left text-xs",
-          "text-foreground hover:bg-state-hover",
+          "flex h-7 w-full min-w-full cursor-pointer items-center gap-2.5 rounded-md pr-3 text-left text-xs",
+          "text-foreground hover:bg-[#262322]",
           "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none focus-visible:-outline-offset-1",
-          isActive && "bg-surface-selected text-foreground",
+          isActive && "bg-[#2c2a28] text-foreground",
         )}
       >
         <FileGlyph path={node.path} kind={node.kind} isExpanded={isExpanded} />

@@ -10,6 +10,7 @@ import {
   Image01Icon,
   NoteIcon,
   Pdf01Icon,
+  PythonIcon,
 } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
 import { extensionOf, glyphTone, type GlyphTone } from "@/lib/file-kind";
@@ -40,6 +41,18 @@ const TONE_COLOR: Readonly<Record<GlyphTone, string>> = {
 
 const MARKDOWN_EXTENSIONS = new Set(["md", "mdx", "markdown"]);
 
+// Conductor marks scripts with filled language badges.
+const BADGE_BY_EXTENSION: Readonly<Record<string, { label: string; fill: string; ink: string }>> = {
+  js: { label: "JS", fill: "#f5c90f", ink: "#1c1917" },
+  mjs: { label: "JS", fill: "#f5c90f", ink: "#1c1917" },
+  cjs: { label: "JS", fill: "#f5c90f", ink: "#1c1917" },
+  jsx: { label: "JS", fill: "#f5c90f", ink: "#1c1917" },
+  ts: { label: "TS", fill: "#3178c6", ink: "#ffffff" },
+  mts: { label: "TS", fill: "#3178c6", ink: "#ffffff" },
+  cts: { label: "TS", fill: "#3178c6", ink: "#ffffff" },
+  tsx: { label: "TS", fill: "#3178c6", ink: "#ffffff" },
+};
+
 /** The coloured file/folder mark on an explorer row. */
 export function FileGlyph({
   path,
@@ -68,6 +81,21 @@ export function FileGlyph({
   if (MARKDOWN_EXTENSIONS.has(extension)) {
     return <MarkdownMark className={iconClass} />;
   }
+  const badge = BADGE_BY_EXTENSION[extension];
+  if (badge !== undefined) {
+    return <LanguageBadge className={iconClass} {...badge} />;
+  }
+  if (extension === "py" || extension === "pyi") {
+    return (
+      <HugeiconsIcon
+        icon={PythonIcon}
+        aria-hidden
+        strokeWidth={2}
+        className={iconClass}
+        style={{ color: "#437efc" }}
+      />
+    );
+  }
   const tone = glyphTone(path);
   const mark =
     MARK_BY_EXTENSION[extension] ??
@@ -83,6 +111,36 @@ export function FileGlyph({
       className={iconClass}
       style={{ color: mark.color }}
     />
+  );
+}
+
+/** A filled square with the language's initials in its lower right. */
+function LanguageBadge({
+  label,
+  fill,
+  ink,
+  className,
+}: {
+  label: string;
+  fill: string;
+  ink: string;
+  className: string;
+}) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className={className}>
+      <rect x="1" y="1" width="14" height="14" rx="1.5" fill={fill} />
+      <text
+        x="14"
+        y="13.6"
+        textAnchor="end"
+        fontSize="7.5"
+        fontWeight="700"
+        fontFamily="ui-sans-serif, -apple-system, sans-serif"
+        fill={ink}
+      >
+        {label}
+      </text>
+    </svg>
   );
 }
 
