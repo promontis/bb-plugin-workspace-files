@@ -448,7 +448,7 @@ function PanelTabButton({
       onClick={onClick}
       aria-pressed={isSelected}
       className={cn(
-        "flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors",
+        "flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors",
         isSelected ? "bg-[#2c2a28] text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
@@ -518,7 +518,7 @@ function ExplorerRow({
           fontFamily: TREE_FONT_FAMILY,
         }}
         className={cn(
-          "flex h-7 w-full min-w-full cursor-pointer items-center gap-2.5 rounded-md pr-3 text-left text-xs",
+          "flex h-7 w-full min-w-full cursor-pointer items-center gap-2.5 rounded-md pr-3 text-left text-[12.3px]",
           "text-foreground hover:bg-[#262322]",
           "focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none focus-visible:-outline-offset-1",
           isActive && "bg-[#2c2a28] text-foreground",
