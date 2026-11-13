@@ -670,15 +670,7 @@ export function Workspace({
                     onChange={(next) => tabs.setMode(activeTab.path, next)}
                   />
                 ) : null}
-                {isDirty(activeTab) || activeTab.save.kind === "saving" ? (
-                  <ToolbarButton
-                    icon="Check"
-                    label={activeTab.save.kind === "saving" ? "Saving…" : "Save (⌘S)"}
-                    isDisabled={activeTab.save.kind === "saving"}
-                    isSpinning={activeTab.save.kind === "saving"}
-                    onClick={tabs.save}
-                  />
-                ) : null}
+                {/* No Save button: files autosave, like Conductor; ⌘S saves at once. */}
               </>
             ) : null}
             {activeTab !== null ? (

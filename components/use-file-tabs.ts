@@ -29,6 +29,9 @@ export type FileContent =
 
 export type { FileViewMode };
 
+/** How long after the last edit autosave writes the file. */
+const AUTOSAVE_DELAY_MS = 1000;
+
 export type SaveState =
   | { kind: "clean" }
   | { kind: "saving" }
@@ -266,10 +269,9 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
    * BB reads an explicit null as create-only, so the guard is either a hash or
    * an absent field — never null.
    */
-  const writeActive = useCallback(
-    (guard: string | "force") => {
+  const writeTab = useCallback(
+    (path: string | null, guard: string | "force") => {
       const activeScope = scopeRef.current;
-      const path = activePathRef.current;
       if (activeScope === null || path === null) return;
 
       const tab = tabsRef.current.find((candidate) => candidate.path === path);
@@ -327,6 +329,26 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
     },
     [patch, rpc],
   );
+  const writeActive = useCallback(
+    (guard: string | "force") => writeTab(activePathRef.current, guard),
+    [writeTab],
+  );
+
+  // Autosave, like Conductor: a changed text file is written a moment after
+  // the last keystroke, background tabs included. The write keeps its
+  // compare-and-swap guard, so an edit made on disk meanwhile still surfaces
+  // as a conflict instead of being overwritten. A failed or conflicting save
+  // waits for the user (Reload / Overwrite, or typing again after an error).
+  useEffect(() => {
+    const pending = tabs.filter(
+      (tab) => isDirty(tab) && tab.save.kind === "clean" && tab.file?.kind === "text",
+    );
+    if (pending.length === 0) return;
+    const timer = window.setTimeout(() => {
+      for (const tab of pending) writeTab(tab.path, tab.sha256 ?? "force");
+    }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [tabs, writeTab]);
 
   const activeTab = tabs.find((tab) => tab.path === activePath) ?? null;
 
@@ -340,7 +362,13 @@ export function useFileTabs(scope: ScopeRef | null): FileTabsApi {
     closeAll,
     activate: setActivePath,
     setDraft: useCallback(
-      (path, draft) => patch(path, (tab) => ({ ...tab, draft })),
+      // Typing again after a failed save lets autosave retry it.
+      (path, draft) =>
+        patch(path, (tab) => ({
+          ...tab,
+          draft,
+          save: tab.save.kind === "error" ? { kind: "clean" } : tab.save,
+        })),
       [patch],
     ),
     setMode: useCallback(
