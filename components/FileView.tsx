@@ -9,6 +9,8 @@ import { formatBytes, languageLabel } from "@/lib/file-kind";
 import { findMatches, matchIndexAt, stepMatch } from "@/lib/find";
 import { FindBar } from "./FindBar";
 import type { FileTab } from "./use-file-tabs";
+import type * as MonacoNs from "monaco-editor";
+import { MonacoEditor } from "./monaco/MonacoEditor";
 
 export interface FileViewProps {
   tab: FileTab;
@@ -25,6 +27,8 @@ export interface FileViewProps {
   onCloseFind: () => void;
   /** A search hit to bring into view in this file; `nonce` re-reveals the same line. */
   revealLine: { line: number; nonce: number } | null;
+  /** Monaco once loaded: Read and Edit then both render in it, like Conductor. */
+  monaco?: typeof MonacoNs | null;
 }
 
 /** A range to select in the editor; `nonce` re-applies an unchanged range. */
@@ -44,6 +48,7 @@ export function FileView({
   findRequest,
   onCloseFind,
   revealLine,
+  monaco = null,
 }: FileViewProps) {
   const file = tab.file;
 
@@ -91,6 +96,25 @@ export function FileView({
           {file.reason} ({formatBytes(file.sizeBytes)})
         </span>
       </Centered>
+    );
+  }
+
+  if (monaco !== null && tab.mode !== "preview") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SaveNotice tab={tab} onReload={onReload} onOverwrite={onOverwrite} />
+        <MonacoEditor
+          key={tab.path}
+          monaco={monaco}
+          path={tab.path}
+          value={tab.draft ?? file.content}
+          readOnly={tab.mode !== "edit" || !file.editable}
+          onChange={(next) => onChangeDraft(tab.path, next)}
+          onSave={onSave}
+          reveal={revealLine}
+          findRequest={findRequest}
+        />
+      </div>
     );
   }
 

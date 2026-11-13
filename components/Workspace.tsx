@@ -19,6 +19,8 @@ import { Explorer } from "./Explorer";
 import { EditorTabs } from "./EditorTabs";
 import { FileView } from "./FileView";
 import { DiffView } from "./DiffView";
+import { MonacoDiffEditor } from "./monaco/MonacoEditor";
+import { useMonaco } from "./monaco/use-monaco";
 import { useGitFile } from "./use-git-file";
 import {
   Dialog,
@@ -328,6 +330,7 @@ export function Workspace({
   const activeTab = tabs.activeTab;
   const resolved = tree.scope;
 
+  const { monaco } = useMonaco();
   const git = useGitFile({
     environmentId: resolved?.environmentId ?? null,
     path: activeTab?.path ?? null,
@@ -756,6 +759,20 @@ export function Workspace({
             excluded={tree.excluded}
             onQuickOpen={() => setIsQuickOpen(true)}
           />
+        ) : display !== "file" &&
+          monaco !== null &&
+          git.originalContent !== null &&
+          activeTab.file?.kind === "text" ? (
+          <MonacoDiffEditor
+            key={activeTab.path}
+            monaco={monaco}
+            path={activeTab.path}
+            original={git.originalContent}
+            modified={activeTab.draft ?? activeTab.file.content}
+            sideBySide={display === "split"}
+            ignoreWhitespace={ignoreWhitespace}
+            wrapLines={wrapLines}
+          />
         ) : display !== "file" ? (
           <DiffView
             patch={git.patch}
@@ -767,6 +784,7 @@ export function Workspace({
           />
         ) : (
           <FileView
+            monaco={monaco}
             tab={activeTab}
             onChangeDraft={tabs.setDraft}
             onSave={tabs.save}

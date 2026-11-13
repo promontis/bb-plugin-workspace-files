@@ -41,6 +41,7 @@ const gitContract = defineRpcContract({
     input: z.object({ ...environmentInput, target: targetSchema, ignoreWhitespace: z.boolean() }),
     output: z.looseObject({
       outcome: z.string(),
+      mergeBaseRef: z.string().nullable().optional(),
       files: z
         .array(
           z.looseObject({
@@ -65,6 +66,25 @@ const gitContract = defineRpcContract({
         patch: z.looseObject({ patch: z.string(), truncated: z.boolean() }).optional(),
       }),
     ),
+  },
+  fileSide: {
+    input: z.object({
+      ...environmentInput,
+      query: z.union([
+        z.object({ target: z.literal("uncommitted"), path: z.string(), side: z.literal("old") }),
+        z.object({
+          target: z.literal("all"),
+          mergeBaseRef: z.string(),
+          path: z.string(),
+          side: z.literal("old"),
+        }),
+      ]),
+    }),
+    output: z.looseObject({
+      outcome: z.string(),
+      code: z.string().optional(),
+      file: z.looseObject({ content: z.string(), contentEncoding: z.string() }).optional(),
+    }),
   },
   viewed: {
     input: z.object({ ...environmentInput, target: targetSchema, paths: z.array(z.string()) }),
@@ -105,6 +125,8 @@ export interface GitFileState {
   isPatchTruncated: boolean;
   isBinary: boolean;
   changeKind: string | null;
+  /** The file before the changes (empty for a new file); null while loading. */
+  originalContent: string | null;
   /** Untracked files are new on disk and not yet known to git. */
   isUntracked: boolean;
   isViewed: boolean;
@@ -118,6 +140,7 @@ const NO_CHANGES: GitFileState = {
   isPatchTruncated: false,
   isBinary: false,
   changeKind: null,
+  originalContent: null,
   isUntracked: false,
   isViewed: false,
   isLoading: false,
@@ -177,6 +200,38 @@ export function useGitFile({
   });
   const patchRow = key === null ? undefined : patches.data?.[key];
 
+  const mergeBaseRef = files.data?.mergeBaseRef ?? null;
+  const sideQuery =
+    entry === undefined || path === null
+      ? null
+      : target.type === "uncommitted"
+        ? ({ target: "uncommitted", path: entry.path, side: "old" } as const)
+        : mergeBaseRef === null
+          ? null
+          : ({ target: "all", mergeBaseRef, path: entry.path, side: "old" } as const);
+  const isNewFile = entry?.origin === "untracked" || entry?.changeKind === "added";
+  const oldSide = useRpcQuery({
+    pluginId: GIT_PLUGIN_ID,
+    contract: gitContract,
+    method: "fileSide",
+    input: {
+      environmentId: environmentId ?? "-",
+      query: sideQuery ?? { target: "uncommitted", path: path ?? "-", side: "old" },
+    },
+    enabled: sideQuery !== null && !isNewFile && entry?.binary !== true,
+  });
+  const originalContent = isNewFile
+    ? ""
+    : oldSide.data === undefined
+      ? null
+      : oldSide.data.outcome === "available" && oldSide.data.file !== undefined
+        ? oldSide.data.file.contentEncoding === "base64"
+          ? null
+          : oldSide.data.file.content
+        : oldSide.data.code === "ENOENT"
+          ? ""
+          : null;
+
   const viewed = useRpcQuery({
     pluginId: GIT_PLUGIN_ID,
     contract: gitContract,
@@ -216,6 +271,7 @@ export function useGitFile({
     isPatchTruncated: patchRow?.patch?.truncated === true,
     isBinary: entry.binary,
     changeKind: entry.changeKind,
+    originalContent,
     isUntracked: entry.origin === "untracked",
     isViewed,
     isLoading: patches.isLoading,

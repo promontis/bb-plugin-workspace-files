@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   defineRpcContract,
   PLUGIN_CLI_OUTPUT_MAX_BYTES,
@@ -128,6 +128,11 @@ export const rpcContract = defineRpcContract({
   },
   /** A lease for the plugin's own `docs/` directory, for the settings page. */
   preview: {
+    input: z.null(),
+    output: z.object({ baseUrl: z.string(), expiresAtMs: z.number() }),
+  },
+  /** The Monaco editor bundle (editor.js, editor.css, editor.worker.js) over a preview URL. */
+  monacoAssets: {
     input: z.null(),
     output: z.object({ baseUrl: z.string(), expiresAtMs: z.number() }),
   },
@@ -431,6 +436,39 @@ export default function plugin(bb: BbPluginApi) {
     return previewCache;
   }
 
+  let monacoCache: { baseUrl: string; expiresAtMs: number } | null = null;
+
+  /**
+   * `monaco-assets/` beside the entry (source checkout) or one level up from
+   * `dist/` (built install). Built on first use when it is missing, the way
+   * BB's own Monaco plugin stages its bundle.
+   */
+  async function monacoLease() {
+    const now = Date.now();
+    if (monacoCache !== null && monacoCache.expiresAtMs - now > PREVIEW_REFRESH_MARGIN_MS) {
+      return monacoCache;
+    }
+    const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+      path.join(moduleDir, "monaco-assets"),
+      path.join(moduleDir, "..", "monaco-assets"),
+    ];
+    let root = candidates.find((candidate) => existsSync(path.join(candidate, "editor.js")));
+    if (root === undefined) {
+      const script = [
+        path.join(moduleDir, "scripts", "stage-monaco.mjs"),
+        path.join(moduleDir, "..", "scripts", "stage-monaco.mjs"),
+      ].find((candidate) => existsSync(candidate));
+      if (script === undefined) throw new Error("The Monaco bundle is not installed.");
+      bb.log.info("Monaco bundle missing; building it");
+      await import(pathToFileURL(script).href);
+      root = candidates.find((candidate) => existsSync(path.join(candidate, "editor.js")));
+      if (root === undefined) throw new Error("Could not build the Monaco bundle.");
+    }
+    monacoCache = await bb.sdk.files.createPreview({ rootPath: root, ttlMs: PREVIEW_TTL_MS });
+    return monacoCache;
+  }
+
   bb.rpc.register(rpcContract, {
     async workspaces() {
       // One request gives every project, its checkouts, and the environments
@@ -504,6 +542,7 @@ export default function plugin(bb: BbPluginApi) {
     },
 
     preview: () => previewLease(),
+    monacoAssets: () => monacoLease(),
 
     async resolve({ scope }) {
       return resolveScope(scope);
