@@ -137,6 +137,13 @@ export interface GitFileState {
   isUntracked: boolean;
   isViewed: boolean;
   isLoading: boolean;
+  /**
+   * Everything a diff of this file needs has arrived (or failed): whether it
+   * is changed, its patch, and the old side for the full-file view. A diff
+   * drawn before then is drawn again when the rest arrives, which shows as
+   * the view jumping on every file switch.
+   */
+  isSettled: boolean;
   setViewed(viewed: boolean): Promise<void>;
 }
 
@@ -150,6 +157,7 @@ const NO_CHANGES: GitFileState = {
   isUntracked: false,
   isViewed: false,
   isLoading: false,
+  isSettled: true,
   setViewed: async () => undefined,
 };
 
@@ -270,8 +278,18 @@ export function useGitFile({
   );
 
   if (!enabled || !isGit || entry === undefined) {
-    return { ...NO_CHANGES, isLoading: status.isLoading || files.isLoading };
+    const isLoading = status.isLoading || files.isLoading;
+    return { ...NO_CHANGES, isLoading, isSettled: !isLoading };
   }
+  // `isLoading` is false for a moment before a new key's read starts, so
+  // settled means "the row is here", not "nothing is loading".
+  const isPatchSettled = entry.binary || patchRow !== undefined || patches.error !== null;
+  const isOldSideSettled =
+    sideQuery === null ||
+    isNewFile ||
+    entry.binary ||
+    oldSide.data !== undefined ||
+    oldSide.error !== null;
   return {
     isChanged: true,
     patch: patchRow?.outcome === "available" ? (patchRow.patch?.patch ?? null) : null,
@@ -282,6 +300,7 @@ export function useGitFile({
     isUntracked: entry.origin === "untracked",
     isViewed,
     isLoading: patches.isLoading,
+    isSettled: isPatchSettled && isOldSideSettled,
     setViewed,
   };
 }

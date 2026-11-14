@@ -29,6 +29,8 @@ export interface FileViewProps {
   revealLine: { line: number; nonce: number } | null;
   /** Monaco once loaded: Read and Edit then both render in it, like Conductor. */
   monaco?: typeof MonacoNs | null;
+  /** Every path with a tab, so the editor can drop the models of closed files. */
+  openPaths?: readonly string[];
 }
 
 /** A range to select in the editor; `nonce` re-applies an unchanged range. */
@@ -49,6 +51,7 @@ export function FileView({
   onCloseFind,
   revealLine,
   monaco = null,
+  openPaths,
 }: FileViewProps) {
   const file = tab.file;
 
@@ -103,11 +106,12 @@ export function FileView({
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <SaveNotice tab={tab} onReload={onReload} onOverwrite={onOverwrite} />
+        {/* Not keyed by path: one editor stays mounted and swaps models. */}
         <MonacoEditor
-          key={tab.path}
           monaco={monaco}
           path={tab.path}
           value={tab.draft ?? file.content}
+          openPaths={openPaths ?? [tab.path]}
           // Conductor has no Read/Edit switch: a file is always editable,
           // unless it is too large to edit.
           readOnly={!file.editable}

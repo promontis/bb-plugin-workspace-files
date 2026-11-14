@@ -19,6 +19,7 @@ import type { ResolvedScope, rpcContract } from "../server.js";
 import { Explorer } from "./Explorer";
 import { EditorTabs } from "./EditorTabs";
 import { FileView } from "./FileView";
+import { HoldWhileLoading } from "./HoldWhileLoading";
 import { DiffView } from "./DiffView";
 import { useMonaco } from "./monaco/use-monaco";
 import { useGitFile } from "./use-git-file";
@@ -340,6 +341,11 @@ export function Workspace({
   const resolved = tree.scope;
 
   const { monaco } = useMonaco();
+  // A file still loading is shown as text in the toolbar: its buttons stay in
+  // place (disabled) instead of vanishing for a moment on every file switch.
+  const isTextOrLoading =
+    activeTab !== null &&
+    (activeTab.file?.kind === "text" || (activeTab.file === null && activeTab.error === null));
   const git = useGitFile({
     environmentId: resolved?.environmentId ?? null,
     path: activeTab?.path ?? null,
@@ -679,13 +685,10 @@ export function Workspace({
                 }
               />
             ) : null}
-            {activeTab?.file?.kind === "text" ? (
-              <ToolbarButton icon="Copy" label="Copy file contents" onClick={copyFileContents} />
-            ) : null}
             {activeTab !== null && git.isChanged ? (
               <DisplayToggle value={display} onChange={setDisplay} />
             ) : null}
-            {activeTab?.file?.kind === "text" ? (
+            {activeTab !== null && isTextOrLoading ? (
               <>
                 {display === "file" && monaco !== null && isMarkdownPath(activeTab.path) ? (
                   <PreviewToggle
@@ -694,7 +697,7 @@ export function Workspace({
                     onChange={(preview) => tabs.setMode(activeTab.path, preview ? "preview" : "edit")}
                   />
                 ) : null}
-                {display === "file" && monaco === null ? (
+                {display === "file" && monaco === null && activeTab.file?.kind === "text" ? (
                   <ModeToggle
                     mode={activeTab.mode}
                     isMarkdown={isMarkdownPath(activeTab.path)}
@@ -705,6 +708,21 @@ export function Workspace({
                 ) : null}
                 {/* No Save button: files autosave, like Conductor; ⌘S saves at once. */}
               </>
+            ) : null}
+            {activeTab !== null && git.isChanged ? (
+              <ViewedCheckbox
+                isViewed={git.isViewed}
+                onChange={(next) => {
+                  void git.setViewed(next).catch(() => toast.error("Could not update Viewed"));
+                }}
+              />
+            ) : null}
+            {/* Copy and the ⋮ menu stay last: the buttons before them come and go
+                with the file (changed, markdown), and must not push these two
+                around on every switch. No disabled look while a file loads: a
+                load takes a few frames, and a dimmed button would blink. */}
+            {isTextOrLoading ? (
+              <ToolbarButton icon="Copy" label="Copy file contents" onClick={copyFileContents} />
             ) : null}
             {activeTab !== null ? (
               <div
@@ -772,76 +790,80 @@ export function Workspace({
                 ) : null}
               </div>
             ) : null}
-            {activeTab !== null && git.isChanged ? (
-              <ViewedCheckbox
-                isViewed={git.isViewed}
-                onChange={(next) => {
-                  void git.setViewed(next).catch(() => toast.error("Could not update Viewed"));
-                }}
-              />
-            ) : null}
           </div>
         </div>
 
-        {activeTab === null ? (
-          <EmptyEditor
-            hasWorkspace={resolved !== null}
-            error={tree.error}
-            truncated={tree.truncated}
-            excluded={tree.excluded}
-            onQuickOpen={() => setIsQuickOpen(true)}
-          />
-        ) : display !== "file" && git.patch !== null && !git.isPatchTruncated && !git.isBinary ? (
-          // Conductor's diff: BB's own diff renderer (@pierre/diffs) on the active
-          // code theme — collapsed "N unmodified lines" bars that expand when both
-          // full sides are supplied, hatched gaps, change bars, word highlights.
-          <div key={activeTab.path} data-workspace-files-host-diff="" className="flex min-h-0 flex-1 flex-col overflow-auto">
-            <HostDiff
-              patch={git.patch}
-              path={activeTab.path}
-              view={display === "split" ? "split" : "unified"}
-              overflow={wrapLines ? "wrap" : "scroll"}
-              {...(git.originalContent !== null && activeTab.file?.kind === "text"
-                ? {
-                    experimental_fullFileContents: {
-                      old: { path: activeTab.path, content: git.originalContent },
-                      // The patch describes the file on disk, not an unsaved draft.
-                      new: { path: activeTab.path, content: activeTab.file.content },
-                    },
-                  }
-                : {})}
+        <HoldWhileLoading
+          contentKey={`${display}:${activeTab?.path ?? ""}`}
+          // Ready once the view can be drawn in its final form: the file read
+          // (the full-file diff needs it too) and, for a changed file, the
+          // patch and its old side. Anything less draws the view twice.
+          ready={
+            activeTab === null ||
+            ((activeTab.file !== null || activeTab.error !== null) && git.isSettled)
+          }
+        >
+          {activeTab === null ? (
+            <EmptyEditor
+              hasWorkspace={resolved !== null}
+              error={tree.error}
+              truncated={tree.truncated}
+              excluded={tree.excluded}
+              onQuickOpen={() => setIsQuickOpen(true)}
             />
-          </div>
-        ) : display !== "file" ? (
-          <DiffView
-            patch={git.patch}
-            layout={display}
-            wrapLines={wrapLines}
-            isTruncated={git.isPatchTruncated}
-            isBinary={git.isBinary}
-            isLoading={git.isLoading}
-          />
-        ) : (
-          <FileView
-            monaco={monaco}
-            tab={activeTab}
-            onChangeDraft={tabs.setDraft}
-            onSave={tabs.save}
-            onReload={() => tabs.reload()}
-            onOverwrite={tabs.overwrite}
-            onRetry={tabs.retry}
-            revealLine={
-              reveal !== null && reveal.path === activeTab.path
-                ? { line: reveal.line, nonce: reveal.nonce }
-                : null
-            }
-            findRequest={findRequest}
-            onCloseFind={() => {
-              setFindRequest(0);
-              restoreFocus();
-            }}
-          />
-        )}
+          ) : display !== "file" && git.patch !== null && !git.isPatchTruncated && !git.isBinary ? (
+            // Conductor's diff: BB's own diff renderer (@pierre/diffs) on the active
+            // code theme — collapsed "N unmodified lines" bars that expand when both
+            // full sides are supplied, hatched gaps, change bars, word highlights.
+            <div key={activeTab.path} data-workspace-files-host-diff="" className="flex min-h-0 flex-1 flex-col overflow-auto">
+              <HostDiff
+                patch={git.patch}
+                path={activeTab.path}
+                view={display === "split" ? "split" : "unified"}
+                overflow={wrapLines ? "wrap" : "scroll"}
+                {...(git.originalContent !== null && activeTab.file?.kind === "text"
+                  ? {
+                      experimental_fullFileContents: {
+                        old: { path: activeTab.path, content: git.originalContent },
+                        // The patch describes the file on disk, not an unsaved draft.
+                        new: { path: activeTab.path, content: activeTab.file.content },
+                      },
+                    }
+                  : {})}
+              />
+            </div>
+          ) : display !== "file" ? (
+            <DiffView
+              patch={git.patch}
+              layout={display}
+              wrapLines={wrapLines}
+              isTruncated={git.isPatchTruncated}
+              isBinary={git.isBinary}
+              isLoading={git.isLoading}
+            />
+          ) : (
+            <FileView
+              monaco={monaco}
+              openPaths={tabs.tabs.map((tab) => tab.path)}
+              tab={activeTab}
+              onChangeDraft={tabs.setDraft}
+              onSave={tabs.save}
+              onReload={() => tabs.reload()}
+              onOverwrite={tabs.overwrite}
+              onRetry={tabs.retry}
+              revealLine={
+                reveal !== null && reveal.path === activeTab.path
+                  ? { line: reveal.line, nonce: reveal.nonce }
+                  : null
+              }
+              findRequest={findRequest}
+              onCloseFind={() => {
+                setFindRequest(0);
+                restoreFocus();
+              }}
+            />
+          )}
+        </HoldWhileLoading>
       </div>
 
       <Dialog
