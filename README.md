@@ -41,8 +41,8 @@ puts a file tab and an *All changes* tab next to the chats in the thread
 header. Without it, files still open over the chat from the Files tab, but
 there is no tab in the header to switch back and forth.
 
-The two plugins talk through browser events and `localStorage` keys, not a BB
-API:
+The two plugins talk through browser events, `localStorage` keys and one
+route, not a BB API:
 
 | kind | name |
 |---|---|
@@ -50,6 +50,7 @@ API:
 | event | `workspace-files:open-first-change` |
 | localStorage | `workspace-files:last:<environmentId>` |
 | localStorage | `workspace-files:last-change:<environmentId>` |
+| route | `/plugins/workspace-files/editor/environment/<environmentId>/<path>` |
 
 Renaming one of them on one side breaks the Conductor tabs.
 
@@ -62,15 +63,45 @@ markup and experimental APIs. A BB release can break these without warning:
   placed over the element marked `[data-split-pane-id]` and below
   `[data-thread-header-rows]`. If BB renames those attributes, files stop
   opening over the chat.
-- **Jumping to a line** in BB's source viewer finds its scroll container with
-  `[class*="overflow-y-auto"]`. If BB changes that class, a search hit opens at
-  the top of the file.
 - **Monaco is bundled by the plugin** into `monaco-assets/` (built on first use
   when missing) and served through `bb.sdk.files.createPreview`. Its popup layer
   uses the same element id as BB's built-in Monaco plugin, so the two share it.
+- **Jumping to a line** in BB's source viewer, the fallback while Monaco loads
+  or when it fails, finds its scroll container with
+  `[class*="overflow-y-auto"]`. If BB changes that class, a search hit opens at
+  the wrong place.
 - **Viewed** calls BB's git plugin (`bb--git`) with a contract copied into
   `components/use-git-file.ts`; BB does not publish that contract.
 - Many slots and hooks are `experimental_` in the BB plugin SDK.
+
+## Waiting on BB
+
+The plan is for this plugin to stop shipping its own editor. BB already has
+one: the built-in `monaco-editor` plugin registers as a `fileOpener`, and the
+user picks the editor per file type under Settings → File openers. But BB only
+uses that choice when it opens a file itself (`openFilePreview`), and then the
+file lands in a side-panel tab. A plugin cannot ask BB to render the user's
+chosen editor in its own view: `experimental_FilePreview` always shows BB's
+read-only preview.
+
+So the plugin keeps its own Monaco, and the fallback viewer with it, until BB
+can open files in the thread's main area:
+
+- [get-bb/bb#7707](https://github.com/get-bb/bb/issues/7707) asks for a slot
+  in place of the timeline and a setting for where files open (side panel or
+  main area). Once it lands, this plugin opens files with
+  `openFilePreview` and lets BB pick the editor and the place. The overlay,
+  the bundled Monaco and the fallback viewer go away.
+- [get-bb/bb#7710](https://github.com/get-bb/bb/issues/7710) asks for the side
+  panel and open files to belong to the environment instead of the thread.
+  With that, Conductor UI can read open files from BB, and the events,
+  `localStorage` keys and route in the table above go away, except
+  `workspace-files:open-first-change`: BB has no intent to open a diff yet,
+  so *All changes* still asks this plugin directly.
+
+Until then, switching to BB's editor would mean opening files in the side
+panel instead of over the chat, and giving up autosave (BB's editor saves
+with a button or <kbd>⌘S</kbd>).
 
 ## Search in files
 
