@@ -57,7 +57,7 @@ Renaming one of them on one side breaks the Conductor tabs.
 ## Known fragile spots
 
 BB has no plugin API for some of what this plugin does, so it leans on BB's
-markup and experimental APIs. A BB release can break these without warning:
+markup and internals. A BB release can break these without warning:
 
 - **The editor over the chat** is a `position: fixed` layer in `document.body`,
   placed over the element marked `[data-split-pane-id]` and below
@@ -70,7 +70,11 @@ markup and experimental APIs. A BB release can break these without warning:
   or when it fails, finds its scroll container with
   `[class*="overflow-y-auto"]`. If BB changes that class, a search hit opens at
   the wrong place.
-- Many slots and hooks are `experimental_` in the BB plugin SDK.
+
+Many slots and hooks this plugin uses are named `experimental_`. That is not a
+workaround: BB starts every new public plugin SDK surface with that prefix
+until its API audit stabilizes it, BB's own plugins included. It does mean a
+BB release may change them, so test after updating BB.
 
 ## Waiting on BB
 
