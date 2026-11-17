@@ -1,110 +1,95 @@
-# bb-plugin-files-editor
+# Workspace Files
 
-A VS Code-style file explorer and editor for the workspace behind a bb thread,
-laid out the way an editor is: a file tree on the left, editor tabs across the
-top, and the whole file in the middle — syntax highlighted, editable, and
-searchable across every file in the project.
+A Conductor-style files panel for BB. It shows the files of the workspace
+behind a thread — its worktree, or the project's checkout — in the right panel,
+and opens them over the chat in a full editor.
 
-![Search in files: results grouped by file with each hit highlighted, and the file opened on the chosen line](https://raw.githubusercontent.com/abdoutelb/bb-plugin-files-editor/main/docs/preview.png)
-
-![The file tree, editor tabs, and find in the open file](https://raw.githubusercontent.com/abdoutelb/bb-plugin-files-editor/main/docs/find-in-file.png)
-
-![A markdown file opened in Preview: the README rendered as a document, with the Preview / Read / Edit toggle](https://raw.githubusercontent.com/abdoutelb/bb-plugin-files-editor/main/docs/md-preview.png)
-
-*Illustrations of the layout, not screenshots — drawn from `docs/preview.html`,
-`docs/find-in-file.html` and `docs/md-preview.html` with invented project data, so
-no real repository or thread titles appear in them.*
+Forked from [bb-plugin-files-editor](https://github.com/abdoutelb/bb-plugin-files-editor)
+by AbdElrahman Telb (MIT). The file tree, search in files, the CLI and the
+search engine come from there; the Conductor layout, the Changes tab, the
+Monaco editor and autosave were added in this fork.
 
 ## What it gives you
 
-- **A Files page** in the sidebar (`/plugins/files-editor/files`) with a
-  workspace picker covering every project checkout and every thread worktree.
-- **A Files tab beside a thread** — right panel → new tab → *Project files*.
-  Pinned to that thread's workspace, so it shows the files the agent in that
-  conversation is editing.
-- **Search in files.** The field at the top of the tree searches the *text* of
-  every file in the workspace (<kbd>⌘⇧F</kbd>). Results are grouped by file with
-  each hit highlighted; click one and the file opens on that line. It is smart
-  case — lowercase finds any case, a capital makes it exact — with VS Code's
-  toggles beside it: `Aa` match case (<kbd>⌥C</kbd>), `ab` whole word
-  (<kbd>⌥W</kbd>), `.*` regex (<kbd>⌥R</kbd>). File contents are kept in memory
-  between searches, so refining a query re-runs in tens of milliseconds.
-- **Go to file by name.** The magnifier beside the field (<kbd>⌘P</kbd>) is the
-  ranked file-name palette, with arrow keys and Enter.
-- **Find in file.** Inside the open file, the magnifier in the toolbar (or
-  <kbd>⌘F</kbd>): match count, <kbd>Enter</kbd> / <kbd>⇧Enter</kbd> to step, `Aa`
-  for case, and the hit is revealed whether you are reading or editing.
-- **Project, then workspace.** Two dependent pickers — choose the project, then
-  its checkout or one of its worktrees by branch name. Picking a project lands
-  on its checkout.
-- **Click a file and it opens in full** — its own tab, the complete contents,
-  syntax-highlighted by BB's own source renderer, in your BB code theme. A
-  markdown file opens rendered instead, the way BB renders a chat message.
-- **Edit and save.** A Read / Edit toggle switches the pane to an editor — with
-  a third *Preview* segment on a markdown file; <kbd>⌘S</kbd> writes. Saves are
-  guarded by the hash the file had when you opened it, so if an agent edited it
-  underneath you the save stops and offers *Reload* or *Overwrite* rather than
-  clobbering the change.
-- **Images render**, other binaries say so instead of dumping bytes.
+- **A Files tab beside every thread** with a workspace. It opens by itself, so
+  a thread always has its files one click away.
+- **All files.** The file tree of the workspace, with an eye toggle for
+  dotfiles and a resizable explorer.
+- **Changes.** Every uncommitted file, as a list or a tree, with a **Viewed**
+  checkbox per file (shared with BB's own git panel), a filter that hides
+  viewed files, **Discard changes** per file, and **Pull latest from main** when
+  the branch is behind (fast-forward only; a branch with commits of its own is
+  left alone and says so).
+- **Diffs in BB's own renderer**, split or unified, with collapsed unchanged
+  lines that expand, word highlights, whitespace hiding and line wrapping.
+- **A Monaco editor** that autosaves one second after you stop typing. Saves
+  are guarded by the hash the file had when it was opened: if an agent changed
+  it underneath you, the save stops and offers *Reload* or *Overwrite*.
+  Unsaved edits, undo and autosave survive switching back to the chat.
+- **Search in files** (<kbd>⌘⇧F</kbd>) across the whole workspace, with match
+  case (<kbd>⌥C</kbd>), whole word (<kbd>⌥W</kbd>) and regex (<kbd>⌥R</kbd>);
+  **go to file by name** (<kbd>⌘P</kbd>); **find in file** (<kbd>⌘F</kbd>).
+- **Markdown** opens rendered, with *Preview / Read / Edit*. Images render;
+  other binaries say so instead of dumping bytes.
 - **`bb files`** gives an agent the same listing from the CLI.
+
+## Works best with Conductor UI
+
+This plugin is built to sit inside the Conductor layout of
+[conductor-ui](https://github.com/promontis/bb-plugin-conductor-ui), which
+puts a file tab and an *All changes* tab next to the chats in the thread
+header. Without it, files still open over the chat from the Files tab, but
+there is no tab in the header to switch back and forth.
+
+The two plugins talk through browser events and `localStorage` keys, not a BB
+API:
+
+| kind | name |
+|---|---|
+| event | `workspace-files:thread-file` |
+| event | `workspace-files:open-first-change` |
+| localStorage | `workspace-files:last:<environmentId>` |
+| localStorage | `workspace-files:last-change:<environmentId>` |
+
+Renaming one of them on one side breaks the Conductor tabs.
+
+## Known fragile spots
+
+BB has no plugin API for some of what this plugin does, so it leans on BB's
+markup and experimental APIs. A BB release can break these without warning:
+
+- **The editor over the chat** is a `position: fixed` layer in `document.body`,
+  placed over the element marked `[data-split-pane-id]` and below
+  `[data-thread-header-rows]`. If BB renames those attributes, files stop
+  opening over the chat.
+- **The Files tab opens itself** from an `experimental_threadHeaderRow` slot
+  that renders nothing visible.
+- **Jumping to a line** in BB's source viewer finds its scroll container with
+  `[class*="overflow-y-auto"]`. If BB changes that class, a search hit opens at
+  the top of the file.
+- **Monaco is bundled by the plugin** into `monaco-assets/` (built on first use
+  when missing) and served through `bb.sdk.files.createPreview`. Its popup layer
+  uses the same element id as BB's built-in Monaco plugin, so the two share it.
+- **Viewed** calls BB's git plugin (`bb--git`) with a contract copied into
+  `components/use-git-file.ts`; BB does not publish that contract.
+- Many slots and hooks are `experimental_` in the BB plugin SDK.
 
 ## Search in files
 
-Type in the field at the top of the tree — or press <kbd>⌘⇧F</kbd> — and the tree
-gives way to every line in the project that contains it, grouped by file with a
-hit count per file. Click a hit and the file opens on that line, highlighted a
-third of the way down so there is context above it. <kbd>Esc</kbd> brings the
-tree back. Finding a file by *name* is the magnifier beside the field
-(<kbd>⌘P</kbd>).
+The search engine is the plugin's own (there is no ripgrep to call), built for
+refining a query while you type:
 
-**Smart case.** `discount` finds any case; `Discount` — with a capital — finds
-only that. `Aa` (<kbd>⌥C</kbd>) makes any query exact, `ab` (<kbd>⌥W</kbd>)
-matches whole words using Unicode word boundaries, and `.*` (<kbd>⌥R</kbd>) takes
-a regular expression.
-
-### How it stays fast
-
-There is no ripgrep to call, so the search engine is the plugin's own, and it is
-built around the fact that you refine a query while you type it:
-
-- **File contents stay in memory between searches**, checked against each file's
-  size and modification time. The first search reads the workspace from disk;
-  every search after that re-runs the pattern over text already in memory.
+- **File contents stay in memory between searches**, re-checked against each
+  file's size and modification time.
 - **The file list is reused while you type**, instead of walking the workspace
-  again for every keystroke.
-- **Every search cancels the one it replaces**, on the machine doing the search
-  as well as in the view, so a fast typist never queues a backlog.
-- **It runs where the files are.** Listing and search run in the plugin's host
-  process, which BB starts on the machine the workspace lives on — this one or
-  a connected one — so every read is a local disk read and only the matches
-  travel back.
-- **Files are read in parallel**, binaries are skipped by extension before they
-  are opened and by content after, and anything over 2 MB is left out.
-- **It stops early.** A very common word stops at 2,000 hits rather than
-  scanning the rest of the project for results nobody will scroll to.
+  for every keystroke.
+- **Every search cancels the one it replaces.**
+- **It runs where the files are**, in the plugin's host process on the machine
+  the workspace lives on, so only the matches travel back.
+- **A regex cannot freeze the search.** It runs in its own worker thread with a
+  3-second deadline.
 
-Measured on a 6,176-file Laravel project:
-
-| search | search time |
-|---|---|
-| first search after the plugin loads | ~600 ms |
-| the same search again | **~65 ms** |
-| refining `discount` → `discount_percentage` | ~62 ms |
-| a regular expression | ~107 ms |
-| a very common word, stopping at the cap | ~8 ms |
-
-**A regex cannot freeze the search.** A pattern that backtracks catastrophically
-— `(a+)+$` against a long run of `a`s — would block the process running it for
-minutes. So a regex runs in its own worker thread
-with a 3-second deadline, and one that overruns is stopped and reported as too
-slow. Plain-text and whole-word searches are escaped before they run, which
-makes them linear, so they stay on the fast path.
-
-## Dotfiles
-
-`.github`, `.env.example`, `.gitignore` and the rest are listed and searched on
-every workspace, on this machine or a connected one. The eye toggle in the
-explorer hides them.
+It is smart case: `discount` finds any case, `Discount` only that one.
 
 ## The CLI
 
@@ -115,80 +100,57 @@ bb files find <query> [--limit n]
 bb files read <path>
 ```
 
-Everything resolves against the thread the command runs in: its worktree when it
-has one, otherwise the project's default checkout. It reads through BB, so it
-returns the right bytes even when that workspace lives on another machine —
-which is exactly when `ls` and `cat` would quietly read the wrong disk.
+Everything resolves against the thread the command runs in. It reads through
+BB, so it returns the right bytes even when the workspace lives on another
+machine.
 
 ## Settings
 
 **Excluded directories** — one name per line, matched against any path segment.
-Defaults to `.git`, `node_modules`, and `vendor` — the three dependency trees
-big enough to truncate a listing on their own. Remove one to browse it, or add
-`dist`, `.venv`, `target`. Applies to the tree, the palette, and the CLI.
+Defaults to `.git`, `node_modules` and `vendor`. Applies to the tree, the
+palette, search and the CLI.
 
 ## Install
 
 ```sh
-bb plugin install git:https://github.com/abdoutelb/bb-plugin-files-editor.git@^0.1.2
+bb plugin install git:https://github.com/promontis/bb-plugin-workspace-files.git@^0.2.0
 ```
 
-That tracks the 0.x line, so `bb plugin outdated` and `bb plugin update` pick up
-later releases. To work on it locally instead, clone it and install the path:
+To work on it locally, clone it and install the path:
 
 ```sh
-bb plugin install /path/to/bb-plugin-files-editor
+bb plugin install path:/path/to/bb-plugin-workspace-files
 ```
 
 ## Development
 
 ```sh
 npm install --include=dev
-npm test                              # pure logic: trees, ranking, find, paths
+npm test
 npm run typecheck
-bb plugin dev                         # rebuild + reload on save
+bb plugin build .
+bb plugin reload workspace-files
 ```
 
-`lib/` holds the logic worth testing on its own — tree assembly, the fuzzy
-ranker, in-file find, project-wide text search and its content cache, workspace
-grouping, workspace-relative path resolution, route encoding, what counts as
-previewable markdown. `host.ts` is the part that runs on the workspace's
-machine (listing and search); `server.ts` is mostly wiring; the components are
-the view.
+`lib/` holds the logic that is tested on its own: tree assembly, ranking, find,
+text search and its cache, git diff and discard, paths and routes. `host.ts`
+runs on the workspace's machine (listing, search, discard, pull); `server.ts`
+is mostly wiring; `components/` is the view. `scripts/stage-monaco.mjs` builds
+`monaco-assets/` from `monaco-bundle/`.
 
 ## Limits
 
-- The listing stops at 40,000 entries, and the explorer mounts at most 600 rows at a time. The footer says when either
-  limit is in play; widening *Excluded directories* is the fix for a truncated
-  listing.
-- Every `bb files` command is capped by BB's 1 MB limit on a command's output.
-  Past that it prints what fits — whole lines, for a listing — and says how much
-  it cut. BB discards an oversize result rather than truncating it, so the
-  clipping is the difference between a partial answer and none.
-- The editor is a textarea with a gutter, not a code editor: no completion and
-  no multiple cursors, and find in the open file is literal text — no regex,
-  no replace (Search in files does take a regex). For
-  those, BB's builtin **File Editor** (Monaco) plugin claims the file-preview
-  surface; the ↗ button in the toolbar hands it the current file.
-- Reading, a find hit highlights its whole line, because line ranges are what
-  BB's source viewer accepts. Editing selects the exact match. Previewing there
-  is nothing to highlight — the offsets point into the markdown source, not into
-  what is on screen — so <kbd>⌘F</kbd> switches the pane to *Read* first, and a
-  search hit in a markdown file opens it in *Read* on that line, unless you are
-  editing it.
-- *Preview* is BB's chat-message renderer, which knows nothing about where the
-  file lives, so relative image and link paths do not resolve against the
-  workspace. What it makes of raw HTML is its own business, not this plugin's.
+- The listing stops at 40,000 entries; the explorer mounts at most 600 rows at
+  a time. The footer says when either limit is in play.
 - Search in files stops at 2,000 hits, 500 files or 10 seconds, and says so.
-  It honours *Excluded directories*, skips binaries and files over 2 MB, and
-  searches dotfiles only when the eye toggle shows them.
-- A regex runs in its own worker thread with a 3-second deadline, so a pattern
-  that backtracks catastrophically is stopped and reported instead of stalling
-  every search after it. Patterns use JavaScript syntax.
-- File contents are kept between searches and re-checked against each file's
-  size and modification time at most every 3 seconds, so an edit made outside
-  the editor shows up in results within that long.
-- Files over 4 MB open read-only, and markdown over 1,048,576 characters opens
-  as source — rendering is one pass over the whole document, with nothing
-  virtualized.
-- The tree does not create, rename, or delete files.
+  It skips binaries and files over 2 MB.
+- File contents are re-checked at most every 3 seconds, so an edit made
+  outside the editor shows up in search results within that long.
+- Files over 4 MB open read-only.
+- Every `bb files` command is capped by BB's 1 MB limit on command output; past
+  that it prints what fits and says how much it cut.
+- The tree does not create, rename or delete files.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

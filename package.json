@@ -1,7 +1,7 @@
 {
   "name": "bb-plugin-workspace-files",
   "version": "0.2.0",
-  "description": "VS Code-style file explorer and editor for the project or worktree behind a thread: search in files across the whole project, a file tree, editor tabs, syntax-highlighted viewing, find in file, and edit with save.",
+  "description": "Conductor-style files panel for the workspace behind a thread: a file tree with search in files, a Changes tab with Viewed and discard, BB's diff renderer, and a Monaco editor with autosave.",
   "type": "module",
   "engines": {
     "bb": ">=0.48",
@@ -9,7 +9,7 @@
   },
   "bb": {
     "name": "Workspace Files",
-    "description": "VS Code-style file explorer and editor for the project or worktree behind a thread: search in files across the whole project, a file tree, editor tabs, syntax-highlighted viewing, find in file, and edit with save.",
+    "description": "Conductor-style files panel for the workspace behind a thread: a file tree with search in files, a Changes tab with Viewed and discard, BB's diff renderer, and a Monaco editor with autosave.",
     "branding": {
       "icon": "./assets/icon.svg"
     },
@@ -63,13 +63,13 @@
     "vitest": "^3.2.4"
   },
   "license": "MIT",
-  "homepage": "https://github.com/abdoutelb/bb-plugin-files-editor#readme",
+  "homepage": "https://github.com/promontis/bb-plugin-workspace-files#readme",
   "bugs": {
-    "url": "https://github.com/abdoutelb/bb-plugin-files-editor/issues"
+    "url": "https://github.com/promontis/bb-plugin-workspace-files/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abdoutelb/bb-plugin-files-editor.git"
+    "url": "git+https://github.com/promontis/bb-plugin-workspace-files.git"
   },
   "keywords": [
     "bb-plugin",
@@ -99,6 +99,8 @@
     "lib",
     "hooks",
     "skills",
+    "scripts",
+    "monaco-bundle",
     "README.md",
     "LICENSE"
   ]
