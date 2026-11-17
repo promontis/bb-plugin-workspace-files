@@ -11,8 +11,8 @@ Monaco editor and autosave were added in this fork.
 
 ## What it gives you
 
-- **A Files tab beside every thread** with a workspace. It opens by itself, so
-  a thread always has its files one click away.
+- **A Files tab beside every thread** with a workspace: a fixed tab, like
+  BB's own Diff tab, so a thread always has its files one click away.
 - **All files.** The file tree of the workspace, with an eye toggle for
   dotfiles and a resizable explorer.
 - **Changes.** Every uncommitted file, as a list or a tree, with a **Viewed**
@@ -62,8 +62,6 @@ markup and experimental APIs. A BB release can break these without warning:
   placed over the element marked `[data-split-pane-id]` and below
   `[data-thread-header-rows]`. If BB renames those attributes, files stop
   opening over the chat.
-- **The Files tab opens itself** from an `experimental_threadHeaderRow` slot
-  that renders nothing visible.
 - **Jumping to a line** in BB's source viewer finds its scroll container with
   `[class*="overflow-y-auto"]`. If BB changes that class, a search hit opens at
   the top of the file.

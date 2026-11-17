@@ -10,11 +10,8 @@ import { createPortal } from "react-dom";
 import {
   ThreadTitle,
   definePluginApp,
-  experimental_useAppPanel as useAppPanel,
-  experimental_usePanelTabs as usePanelTabs,
   experimental_useSidebarThreads as useSidebarThreads,
   useBbNavigate,
-  type ExperimentalTabReference,
   type ExperimentalThreadHeaderRowProps,
   type ExperimentalThreadTabProps,
   type PluginNavPanelProps,
@@ -29,41 +26,6 @@ import { useGitChanges } from "@/components/use-git-file";
 const PANEL_PATH = "editor";
 const LAST_FILE_PREFIX = "workspace-files:last:";
 const THREAD_FILE_EVENT = "workspace-files:thread-file";
-const THREAD_FILES_TAB = {
-  context: { kind: "thread" },
-  availability: "action",
-  id: "files",
-} as const satisfies ExperimentalTabReference;
-const EDITOR_FILES_TAB = {
-  context: { kind: "nav-panel", panelId: PANEL_PATH },
-  availability: "action",
-  id: "files",
-} as const satisfies ExperimentalTabReference;
-
-function useEnsureFilesTab(
-  tab: ExperimentalTabReference & { availability: "action" },
-  visible = true,
-) {
-  const panel = useAppPanel();
-  const panelTabs = usePanelTabs();
-
-  useEffect(() => {
-    if (!visible || !panelTabs.open) return;
-    const alreadyOpen = panelTabs.tabs.some(
-      (candidate) =>
-        candidate.detail.kind === "plugin" &&
-        candidate.detail.tab.id === tab.id &&
-        candidate.detail.tab.context.kind === tab.context.kind,
-    );
-    if (alreadyOpen) return;
-
-    const previousTab = panelTabs.selectedKey;
-    if (!panel.openTab({ tab, title: "Files" })) return;
-    if (previousTab !== null) {
-      queueMicrotask(() => panel.selectTab(previousTab));
-    }
-  }, [panel, panelTabs.open, panelTabs.selectedKey, panelTabs.tabs, tab, visible]);
-}
 
 type ThreadFileEventDetail = {
   threadId: string;
@@ -117,7 +79,6 @@ function EnsureThreadFilesTab({
   threadId,
   environment,
 }: ExperimentalThreadHeaderRowProps) {
-  useEnsureFilesTab(THREAD_FILES_TAB, environment !== null);
   const environmentId = environment?.id ?? null;
   const file = useThreadFile(threadId, environmentId);
   // Conductor's All changes tab, clicked before any change was opened: show
@@ -312,7 +273,6 @@ function rememberFile(scope: ScopeRef | null, path: string | null) {
 function FilesPage({ subPath }: PluginNavPanelProps) {
   const navigate = useBbNavigate();
   const route = useMemo(() => parseRoute(subPath), [subPath]);
-  useEnsureFilesTab(EDITOR_FILES_TAB);
 
   useEffect(() => rememberFile(route.scope, route.filePath), [route.filePath, route.scope]);
 
@@ -408,7 +368,7 @@ export default definePluginApp((app) => {
 
   app.slots.experimental_tab({
     context: { kind: "thread" },
-    availability: "action",
+    availability: "fixed",
     id: "files",
     title: "Files",
     icon: "FolderOpen",
@@ -419,7 +379,7 @@ export default definePluginApp((app) => {
 
   app.slots.experimental_tab({
     context: { kind: "nav-panel", panelId: "editor" },
-    availability: "action",
+    availability: "fixed",
     id: "files",
     title: "Files",
     icon: "FolderOpen",
