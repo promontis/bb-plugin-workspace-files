@@ -70,8 +70,6 @@ markup and experimental APIs. A BB release can break these without warning:
   or when it fails, finds its scroll container with
   `[class*="overflow-y-auto"]`. If BB changes that class, a search hit opens at
   the wrong place.
-- **Viewed** calls BB's git plugin (`bb--git`) with a contract copied into
-  `components/use-git-file.ts`; BB does not publish that contract.
 - Many slots and hooks are `experimental_` in the BB plugin SDK.
 
 ## Waiting on BB
@@ -166,6 +164,12 @@ text search and its cache, git diff and discard, paths and routes. `host.ts`
 runs on the workspace's machine (listing, search, discard, pull); `server.ts`
 is mostly wiring; `components/` is the view. `scripts/stage-monaco.mjs` builds
 `monaco-assets/` from `monaco-bundle/`.
+
+Changed files, diffs and **Viewed** come from BB's git plugin (`bb--git`)
+through the slice of its RPC contract copied into `components/use-git-file.ts`,
+the way BB's plugin guide asks plugins to read git. The schemas are loose, so
+new fields don't break them; if BB renames a method or a required field,
+compare with `bb plugin rpc inspect bb--git`.
 
 ## Limits
 
