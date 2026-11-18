@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-workspace-files",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Conductor-style files panel for the workspace behind a thread: a file tree with search in files, a Changes tab with Viewed and discard, BB's diff renderer, and a Monaco editor with autosave.",
   "type": "module",
   "engines": {
@@ -100,6 +100,7 @@
     "hooks",
     "skills",
     "scripts",
+    "monaco-assets",
     "monaco-bundle",
     "README.md",
     "LICENSE"

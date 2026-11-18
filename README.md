@@ -63,8 +63,9 @@ markup and internals. A BB release can break these without warning:
   placed over the element marked `[data-split-pane-id]` and below
   `[data-thread-header-rows]`. If BB renames those attributes, files stop
   opening over the chat.
-- **Monaco is bundled by the plugin** into `monaco-assets/` (built on first use
-  when missing) and served through `bb.sdk.files.createPreview`. Its popup layer
+- **Monaco is bundled by the plugin** into `monaco-assets/` (committed, because
+  Git installs omit the dev dependencies that build it) and served through
+  `bb.sdk.files.createPreview`. Its popup layer
   uses the same element id as BB's built-in Monaco plugin, so the two share it.
 - **Jumping to a line** in BB's source viewer, the fallback while Monaco loads
   or when it fails, finds its scroll container with
@@ -144,7 +145,7 @@ palette, search and the CLI.
 ## Install
 
 ```sh
-bb plugin install git:https://github.com/promontis/bb-plugin-workspace-files.git@^0.2.0
+bb plugin install git:https://github.com/promontis/bb-plugin-workspace-files.git@^0.2.1
 ```
 
 To work on it locally, clone it and install the path:
@@ -166,8 +167,9 @@ bb plugin reload workspace-files
 `lib/` holds the logic that is tested on its own: tree assembly, ranking, find,
 text search and its cache, git diff and discard, paths and routes. `host.ts`
 runs on the workspace's machine (listing, search, discard, pull); `server.ts`
-is mostly wiring; `components/` is the view. `scripts/stage-monaco.mjs` builds
-`monaco-assets/` from `monaco-bundle/`.
+is mostly wiring; `components/` is the view. `scripts/stage-monaco.mjs` rebuilds
+the committed `monaco-assets/` from `monaco-bundle/`; run it after changing the
+`monaco-editor` version and commit the result.
 
 Changed files, diffs and **Viewed** come from BB's git plugin (`bb--git`)
 through the slice of its RPC contract copied into `components/use-git-file.ts`,
