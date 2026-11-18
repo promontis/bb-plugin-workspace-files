@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { defineRpcContract } from "@get-bb/plugin-sdk";
+import type { defineRpcContract as sdkDefineRpcContract } from "@get-bb/plugin-sdk";
 import {
   experimental_useRpcKeyedQuery as useRpcKeyedQuery,
   experimental_useRpcMutation as useRpcMutation,
@@ -13,6 +13,11 @@ import { z } from "zod";
  * schemas are deliberately loose so a newer git plugin can add fields.
  */
 const GIT_PLUGIN_ID = "bb--git";
+
+// The app bundle only gets `@get-bb/plugin-sdk/app` from BB; the bare SDK
+// package is a devDependency, which Git installs omit. `defineRpcContract` is
+// an identity function, so keep its types and skip the runtime import.
+const defineRpcContract = ((contract: unknown) => contract) as typeof sdkDefineRpcContract;
 
 const targetSchema = z.union([
   z.object({ type: z.literal("uncommitted") }),
